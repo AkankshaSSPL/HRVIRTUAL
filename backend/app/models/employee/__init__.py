@@ -1,0 +1,33 @@
+from app.models.employee.models import (
+    AttendanceRecord,
+    Candidate,
+    Department,
+    Designation,
+    Employee,
+    EmploymentType,
+    EmployeeAsset,
+    EmployeeDocument,
+    LeaveApproval,
+    LeaveBalance,
+    LeaveRequest,
+    LeaveType,
+    Notification,
+    ResumeUpload,
+)
+
+__all__ = [
+    "AttendanceRecord",
+    "Candidate",
+    "Department",
+    "Designation",
+    "Employee",
+    "EmploymentType",
+    "EmployeeAsset",
+    "EmployeeDocument",
+    "LeaveApproval",
+    "LeaveBalance",
+    "LeaveRequest",
+    "LeaveType",
+    "Notification",
+    "ResumeUpload",
+]
