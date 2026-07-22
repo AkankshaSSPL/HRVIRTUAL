@@ -12,6 +12,7 @@ const emptyForm: Partial<EmployeeCreatePayload> = {};
 export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: string | null; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<EmployeeCreatePayload>>(emptyForm);
+  const [currentSalary, setCurrentSalary] = useState("");
   const employeeQuery = useQuery({ queryKey: ["employee-detail", employeeId], queryFn: () => getEmployee(employeeId!), enabled: Boolean(open && employeeId) });
   const optionsQuery = useQuery({ queryKey: ["employee-form-options"], queryFn: getEmployeeFormOptions, enabled: open });
   const lookupsQuery = useQuery({
@@ -54,13 +55,17 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
       aadhaar_number: employee.aadhaar_number ?? "",
       uan_number: employee.uan_number ?? "",
     });
+    setCurrentSalary(employee.current_salary != null ? String(employee.current_salary) : "");
   }, [employeeQuery.data]);
 
   function setValue(key: keyof EmployeeCreatePayload, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  const payload = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value === "" ? null : value])) as Partial<EmployeeCreatePayload>;
+  const payload = {
+    ...Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value === "" ? null : value])),
+    current_salary: currentSalary === "" ? null : Number(currentSalary),
+  } as Partial<EmployeeCreatePayload>;
 
   return (
     <DrawerPanel open={open} title="Update Employee" size="2xl" onClose={onClose}>
@@ -92,7 +97,16 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             <Field label="Aadhaar number"><Input value={form.aadhaar_number ?? ""} onChange={(event) => setValue("aadhaar_number", event.target.value)} /></Field>
             <Field label="UAN number"><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
           </FormSection>
-          <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Salary changes are excluded here and must continue through the salary approval workflow.</p>
+          <FormSection title="Payroll">
+            <Field label="Current salary">
+              <Input
+                type="number"
+                min="0"
+                value={currentSalary}
+                onChange={(event) => setCurrentSalary(event.target.value)}
+              />
+            </Field>
+          </FormSection>
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Employee update could not be saved.</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>

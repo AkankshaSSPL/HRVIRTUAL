@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -25,6 +26,18 @@ from app.agents.shared.base_agent import BaseAgent
 from app.agents.shared.runtime_context import RuntimeContext
 from app.models.audit import AuditLog
 from app.models.agents import AgentRun
+from app.services.onboarding_progress import compute_onboarding_progress
+
+logger = logging.getLogger(__name__)
+
+# Question/connector words that show up in onboarding-progress phrasing regardless of
+# word order (e.g. "which step of onboarding progress is X", "X's onboarding progress",
+# "onboarding status of X"). Stripping these leaves just the employee name behind.
+_ONBOARDING_PROGRESS_STOPWORDS = re.compile(
+    r"\b(?:what'?s|whats|what|which|check|show|tell|me|please|the|a|an|is|are|was|were|for|of|on|at|"
+    r"onboarding|progress|status|stage|step)\b",
+    re.IGNORECASE,
+)
 
 
 class EmployeeAgent(BaseAgent):
@@ -63,11 +76,7 @@ class EmployeeAgent(BaseAgent):
         if action == "confirm_update":
             return self._handle_confirmation(command, user_id)
         if self._is_onboarding_progress_query(command):
-            return self._status_response(
-                "Onboarding progress not available yet",
-                "I can't check onboarding progress through chat yet — that lookup isn't built into this agent. "
-                "I can show the employee's profile instead if that helps in the meantime.",
-            )
+            return self._onboarding_progress_response(command)
         parsed_action = self._classify_action(action, command)
         page, page_size = self._pagination(command)
 
@@ -376,6 +385,8 @@ class EmployeeAgent(BaseAgent):
             return EmployeeAgentAction.CREATE
         if "reporting manager" in normalized or "manager of" in normalized:
             return EmployeeAgentAction.SHOW_MANAGER
+        if "profile" in normalized and "employees" not in normalized and "list" not in normalized and "all" not in normalized:
+            return EmployeeAgentAction.SHOW_PROFILE
         if "show" in normalized and "employee" in normalized and "employees" not in normalized and "list" not in normalized and "all" not in normalized:
             return EmployeeAgentAction.SHOW_PROFILE
         if "department" in normalized or any(item in normalized for item in ("engineering", "finance", "people", "hr", "sales", "marketing")):
@@ -397,7 +408,57 @@ class EmployeeAgent(BaseAgent):
 
     def _resolve_employee(self, command: str):
         query = self._employee_query(command)
+        logger.info(f"_resolve_employee: extracted query = {query!r}")
         return find_one_employee(self.db, query) if query else None
+
+    def _onboarding_employee_query(self, command: str) -> str:
+        query = self._employee_query(command)
+        if query:
+            return query
+        stripped = _ONBOARDING_PROGRESS_STOPWORDS.sub(" ", command)
+        stripped = re.sub(r"[^A-Za-z\s.]", " ", stripped)
+        stripped = re.sub(r"\s+", " ", stripped).strip(" .")
+        return stripped
+
+    def _onboarding_progress_response(self, command: str) -> dict[str, Any]:
+        query = self._onboarding_employee_query(command)
+        employee = find_one_employee(self.db, query) if query else None
+        if not employee:
+            return self._status_response(
+                "Employee not found",
+                f"I could not find an employee matching '{query or command}' to check onboarding progress for. "
+                "Please check the spelling or use the full name as it appears in the employee list.",
+            )
+        progress = compute_onboarding_progress(self.db, employee)
+        summary = employee_to_summary(employee)
+        pending = progress["pending"]
+        card_summary = (
+            f"{progress['percent']}% complete — {len(pending)} step(s) remaining: {', '.join(pending)}."
+            if pending
+            else "Onboarding is fully complete."
+        )
+        return {
+            "agent": self.name,
+            "agent_display_name": "Employee Agent",
+            "action": "onboarding_progress",
+            "message": f"{summary['name']} is {progress['percent']}% through onboarding.",
+            "operation_summary": "Onboarding progress check",
+            "execution_status": "Completed",
+            "workflow_status": "Completed",
+            "execution_summary": f"{len(progress['completed'])} of {len(progress['items'])} onboarding steps are complete.",
+            "structured_response": {
+                "type": "onboarding_progress_check",
+                "title": f"{summary['name']}'s onboarding progress",
+                "summary": card_summary,
+                "employee": summary,
+                "percent": progress["percent"],
+                "items": progress["items"],
+                "completed": progress["completed"],
+                "pending": pending,
+                "welcome_kit_ready": progress["welcome_kit_ready"],
+                "payload": {"employee_id": str(employee.id)},
+            },
+        }
 
     def _is_onboarding_progress_query(self, command: str) -> bool:
         normalized = command.lower()
@@ -407,29 +468,73 @@ class EmployeeAgent(BaseAgent):
         return "onboarding" in normalized and "progress" in normalized
 
     def _employee_query(self, command: str) -> str:
-        normalized = command.lower()
-        if re.search(r"\b(?:employee|employees|staff)\s+(?:list|directory)\b|\b(?:list|show|give|get)\s+(?:me\s+)?(?:all\s+)?(?:employee|employees|staff)\b", normalized):
+        """
+        Extract employee name from natural language commands.
+        Supports:
+            - show employee Nikita Bhilare
+            - employee Nikita Bhilare
+            - Nikita Bhilare (if it looks like a name)
+        """
+        if not command:
             return ""
-        relationship = self._manager_relationship(command)
-        if relationship:
-            return relationship[1]
-        match = re.search(r"(?:salary|pay|ctc)\s+(?:for|to|of)\s+([a-z][a-z\s.]+?)(?:\s+from|\s+effective|$)", command, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-        match = re.search(
-            r"(?:salary|manager|department)\s+of\s+([a-z][a-z\s.]+?)(?:['’]s)?(?:\s+to|\s+from|$)",
-            command, re.IGNORECASE,
-        )
-        if not match:
-            match = re.search(
-                r"(?:employee|show|find|search|update|change|deactivate|delete|remove|manager of)"
-                r"\s+(?:me\s+)?([a-z][a-z\s.]+?)(?:['’]s)?"
-                r"(?:\s+salary|\s+profile|\s+department|\s+manager|\s+to|\s+from|$)",
-                command, re.IGNORECASE,
-            )
+
+        # 1. Direct patterns for commands starting with show/employee
+        patterns = [
+            r"^(?:show|find|get|display|view)\s+employee\s+(.+)$",
+            r"^employee\s+(.+)$",
+            r"^(?:profile for|info on)\s+(.+)$",
+        ]
+        for pat in patterns:
+            match = re.match(pat, command.strip(), re.IGNORECASE)
+            if match:
+                name = match.group(1).strip()
+                # Skip if it's "all", "list", etc.
+                if name and name.lower() not in {"employees", "employee", "all", "list", "directory"}:
+                    logger.info(f"Direct pattern matched: {name!r}")
+                    return name
+
+        # 2. Check if the command is just "show employees" or similar – return empty
+        if re.search(r"\b(?:employee|employees|staff)\s+(?:list|directory)\b|\b(?:list|show|give|get)\s+(?:me\s+)?(?:all\s+)?(?:employee|employees|staff)\b", command, re.IGNORECASE):
+            return ""
+
+        # 3. Special case: "show <name>" without "employee" – if it has exactly two words, treat as name
+        match = re.match(r"^(?:show|find|get|display|view)\s+([A-Za-z]+\s+[A-Za-z]+)$", command.strip(), re.IGNORECASE)
         if match:
             name = match.group(1).strip()
-            return "" if name.lower() in {"employees", "employee"} else name
+            if name and name.lower() not in {"employees", "employee", "all", "list"}:
+                return name
+
+        # 4. Handle "update <name> salary to <amount>"
+        match = re.search(r"(?:salary|pay|ctc)\s+(?:for|to|of)\s+([a-z][a-z\s.]+?)(?:\s+from|\s+effective|$)", command, re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            if name and name.lower() not in {"employees", "employee", "all"}:
+                return name
+
+        # 5. Handle "profile of <name>"
+        match = re.search(r"\bprofile\s+(?:of|for)\s+([a-z][a-z\s.]+?)(?:['’]s)?(?:\s+salary|\s+department|\s+manager|\s+to|\s+from|$)", command, re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            if name and name.lower() not in {"employees", "employee"}:
+                return name
+
+        # 6. Relationship patterns like "manager of X" – we already handle them separately, but fallback
+        relationship = self._manager_relationship(command)
+        if relationship:
+            return relationship[1]  # employee name
+
+        # 7. General fallback: if command has at least two words, take the last two as name (e.g., "show me Nikita Bhilare" → "Nikita Bhilare")
+        parts = command.strip().split()
+        if len(parts) >= 2:
+            candidate = " ".join(parts[-2:])
+            # Ensure it doesn't contain words like "salary", "manager", etc.
+            if not any(word in candidate.lower() for word in ("salary", "manager", "department", "employee", "all", "list")):
+                return candidate
+
+        # 8. Last resort: if only one word, and it's not a stop word, treat as name
+        if len(parts) == 1 and parts[0].lower() not in {"show", "find", "get", "view", "display"}:
+            return parts[0]
+
         return ""
 
     def _department_from_command(self, command: str) -> str:

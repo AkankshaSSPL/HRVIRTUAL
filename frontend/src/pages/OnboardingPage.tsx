@@ -1,61 +1,52 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BadgeCheck, CheckCircle2, Clock3 } from "lucide-react";
+import { BadgeCheck } from "lucide-react";
 
-import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge } from "@/components/ui-system";
-import { agentThemeFor } from "@/lib/agent-theme";
-import { cn } from "@/lib/utils";
-import { getWorkflows } from "@/services/agents";
-
-function commandFromWorkflow(workflow: Awaited<ReturnType<typeof getWorkflows>>[number]) {
-  return workflow.messages.find((message) => message.type === "user_message")?.content ?? "Onboarding request";
-}
-
-function onboardingName(workflow: Awaited<ReturnType<typeof getWorkflows>>[number]) {
-  const response = workflow.messages
-    .map((message) => message.metadata?.structured_response as { candidate?: { name?: string }; draft?: { name?: string } } | undefined)
-    .find((item) => item?.candidate?.name || item?.draft?.name);
-  return response?.candidate?.name ?? response?.draft?.name ?? commandFromWorkflow(workflow).replace(/^(onboard|hire)\s+/i, "");
-}
+import { OnboardingProgressBar } from "@/components/employees/OnboardingProgressBar";
+import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard } from "@/components/ui-system";
+import { getEmployees } from "@/services/employees";
 
 export function OnboardingPage() {
-  const workflowsQuery = useQuery({ queryKey: ["onboarding-workflows"], queryFn: getWorkflows, refetchInterval: 15000 });
-  const onboardingWorkflows = useMemo(
-    () => (workflowsQuery.data ?? []).filter((workflow) => workflow.active_agent?.includes("onboarding")).slice(0, 12),
-    [workflowsQuery.data],
+  const navigate = useNavigate();
+  const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: getEmployees, refetchInterval: 15000 });
+  const inProgress = useMemo(
+    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) < 100),
+    [employeesQuery.data],
   );
-  const theme = agentThemeFor("onboarding_agent");
 
   return (
     <AppLayout>
       <PageContainer>
-        <PageHeader title="Onboarding" description="Live onboarding workspace for employees created by the HR assistant." />
-        {workflowsQuery.isLoading ? <LoadingSkeleton rows={5} /> : null}
-        {!workflowsQuery.isLoading && !onboardingWorkflows.length ? (
-          <EmptyState icon={BadgeCheck} title="No onboarding workflows yet" description="Start onboarding from Agent Command and completed employees will appear here." />
+        <PageHeader title="Onboarding" description="Employees still working through the 7-step onboarding checklist." />
+        {employeesQuery.isLoading ? <LoadingSkeleton rows={5} /> : null}
+        {!employeesQuery.isLoading && !inProgress.length ? (
+          <EmptyState icon={BadgeCheck} title="No one is mid-onboarding" description="Newly created employees will appear here until all 7 steps are complete." />
         ) : null}
-        {onboardingWorkflows.length ? (
-          <SectionCard title="Recent Onboarding" description="Auto-refreshes as onboarding requests complete.">
+        {inProgress.length ? (
+          <SectionCard title="In Progress" description="Auto-refreshes as onboarding steps complete. At 100% an employee moves to the Employees page.">
             <div className="grid gap-3 lg:grid-cols-2">
-              {onboardingWorkflows.map((workflow) => {
-                const complete = workflow.status === "COMPLETED";
-                return (
-                  <div key={workflow.workflow_id} className={cn("rounded-lg border p-4 shadow-sm transition-colors", theme.soft)}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md border", complete ? "border-emerald-200 bg-emerald-50 text-emerald-700" : theme.icon)}>
-                          {complete ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
-                        </div>
-                        <div>
-                          <p className="font-semibold">{onboardingName(workflow)}</p>
-                          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{commandFromWorkflow(workflow)}</p>
-                        </div>
-                      </div>
-                      <StatusBadge status={complete ? "Completed" : "In progress"} tone={complete ? "success" : "info"} />
+              {inProgress.map((employee) => (
+                <button
+                  key={employee.id}
+                  type="button"
+                  onClick={() => navigate(`/employees/${employee.id}`)}
+                  className="rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{employee.name ?? "Unnamed employee"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {employee.designation ?? "Employee"} · {employee.department ?? "Unassigned"}
+                      </p>
                     </div>
+                    <span className="text-lg font-bold tabular-nums text-primary">{employee.onboarding_percent ?? 0}%</span>
                   </div>
-                );
-              })}
+                  <div className="mt-3">
+                    <OnboardingProgressBar percent={employee.onboarding_percent ?? 0} />
+                  </div>
+                </button>
+              ))}
             </div>
           </SectionCard>
         ) : null}

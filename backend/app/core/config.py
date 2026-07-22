@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     resume_storage_dir: str = Field(default="storage/resumes", validation_alias="RESUME_STORAGE_DIR")
     max_resume_upload_mb: int = Field(default=10, validation_alias="MAX_RESUME_UPLOAD_MB")
 
+    # --- SMTP settings (NEW) ---
+    smtp_host: str = Field(default="smtp.gmail.com", validation_alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, validation_alias="SMTP_PORT")
+    smtp_user: str = Field(default="", validation_alias="SMTP_USER")
+    smtp_password: str = Field(default="", validation_alias="SMTP_PASSWORD")
+    smtp_from: str = Field(default="", validation_alias="SMTP_FROM")
+    email_enabled: bool = Field(default=True, validation_alias="EMAIL_ENABLED")
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re  # <-- ADDED
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -58,6 +59,7 @@ def employee_to_summary(employee: Employee) -> dict[str, Any]:
         "official_email": employee.official_email,
         "salary": salary_to_display(employee.current_salary),
         "profile_photo": employee.profile_photo,
+        "seat_label": employee.seat_label,
     }
 
 
@@ -132,25 +134,30 @@ def list_employees(
 
 
 def search_employees(db: Session, query: str, *, page: int = 1, page_size: int = 10) -> tuple[list[Employee], int]:
+    """
+    Search employees by name, code, email, or phone with case-insensitive partial match.
+    """
+    if not query:
+        return [], 0
     pattern = f"%{query}%"
     email_name_pattern = f"%{query.strip().lower().replace(' ', '.')}%"
-    statement = (
-        base_employee_query()
-        .outerjoin(User, Employee.user_id == User.id)
-        .where(
-            or_(
-                Employee.employee_code.ilike(pattern),
-                Employee.official_email.ilike(pattern),
-                Employee.official_email.ilike(email_name_pattern),
-                Employee.personal_email.ilike(pattern),
-                Employee.phone.ilike(pattern),
-                Employee.first_name.ilike(pattern),
-                Employee.last_name.ilike(pattern),
-                func.concat(Employee.first_name, " ", Employee.last_name).ilike(pattern),
-                User.first_name.ilike(pattern),
-                User.last_name.ilike(pattern),
-                func.concat(User.first_name, " ", User.last_name).ilike(pattern),
-            )
+    conditions = or_(
+        Employee.employee_code.ilike(pattern),
+        Employee.official_email.ilike(pattern),
+        Employee.official_email.ilike(email_name_pattern),
+        Employee.personal_email.ilike(pattern),
+        Employee.phone.ilike(pattern),
+        Employee.first_name.ilike(pattern),
+        Employee.last_name.ilike(pattern),
+        func.concat(Employee.first_name, " ", Employee.last_name).ilike(pattern),
+        func.concat(Employee.last_name, " ", Employee.first_name).ilike(pattern),
+    )
+    statement = base_employee_query().outerjoin(User, Employee.user_id == User.id).where(
+        or_(
+            conditions,
+            User.first_name.ilike(pattern),
+            User.last_name.ilike(pattern),
+            func.concat(User.first_name, " ", User.last_name).ilike(pattern),
         )
     )
     count_statement = (
@@ -159,14 +166,7 @@ def search_employees(db: Session, query: str, *, page: int = 1, page_size: int =
         .where(Employee.deleted_at.is_(None))
         .where(
             or_(
-                Employee.employee_code.ilike(pattern),
-                Employee.official_email.ilike(pattern),
-                Employee.official_email.ilike(email_name_pattern),
-                Employee.personal_email.ilike(pattern),
-                Employee.phone.ilike(pattern),
-                Employee.first_name.ilike(pattern),
-                Employee.last_name.ilike(pattern),
-                func.concat(Employee.first_name, " ", Employee.last_name).ilike(pattern),
+                conditions,
                 User.first_name.ilike(pattern),
                 User.last_name.ilike(pattern),
                 func.concat(User.first_name, " ", User.last_name).ilike(pattern),
@@ -186,17 +186,103 @@ def get_employee_by_id(db: Session, employee_id: UUID) -> Employee | None:
     return db.scalar(base_employee_query().where(Employee.id == employee_id))
 
 
+# ========== UPDATED find_one_employee with regex stripping ==========
 def find_one_employee(db: Session, query: str) -> Employee | None:
+    """
+    Find a single employee by name, code, email, or ID.
+    Strips common command prefixes using regex before matching.
+    """
+    if not query:
+        return None
+    original = query
+    query = query.strip()
+
+    # Regex patterns to remove common prefixes and capture the actual name/query
+    patterns = [
+        r"^(?:show|find|get|update|employee)\s+(.+)$",
+        r"^(?:profile for|details for|info for)\s+(.+)$",
+        r"^(.+)$",  # fallback
+    ]
+    for pat in patterns:
+        match = re.match(pat, query, re.IGNORECASE)
+        if match:
+            query = match.group(1).strip()
+            break
+
+    # If query now has more than 2 words, assume only first two are first+last name
+    parts = query.split()
+    if len(parts) > 2:
+        query = " ".join(parts[:2])  # take first two tokens
+
+    if not query:
+        return None
+
+    # 1. Try to parse as UUID (employee ID)
+    try:
+        uid = UUID(query)
+        employee = get_employee_by_id(db, uid)
+        if employee:
+            return employee
+    except ValueError:
+        pass
+
+    # 2. Try exact match on employee_code (case-insensitive)
+    employee = db.scalar(
+        base_employee_query().where(func.lower(Employee.employee_code) == func.lower(query))
+    )
+    if employee:
+        return employee
+
+    # 3. Try exact match on official_email or personal_email (case-insensitive)
+    employee = db.scalar(
+        base_employee_query().where(
+            or_(
+                func.lower(Employee.official_email) == func.lower(query),
+                func.lower(Employee.personal_email) == func.lower(query),
+            )
+        )
+    )
+    if employee:
+        return employee
+
+    # 4. Use search_employees with a limit and pick the first
     employees, _ = search_employees(db, query, page=1, page_size=1)
     if employees:
         return employees[0]
-    normalized = query.strip()
-    parts = normalized.split()
-    if len(parts) > 1 and parts[-1].lower().endswith("s"):
-        singular_query = " ".join([*parts[:-1], parts[-1][:-1]])
+
+    # 5. If the query ends with 's', try singular (e.g., "Akankshas" -> "Akanksha")
+    parts2 = query.split()
+    if len(parts2) > 1 and parts2[-1].lower().endswith("s"):
+        singular_query = " ".join([*parts2[:-1], parts2[-1][:-1]])
         employees, _ = search_employees(db, singular_query, page=1, page_size=1)
         if employees:
             return employees[0]
+
+    # 6. If query has two parts, try first_name + last_name exactly (case-insensitive)
+    if len(parts2) == 2:
+        first, last = parts2[0], parts2[1]
+        employee = db.scalar(
+            base_employee_query().where(
+                func.lower(Employee.first_name) == func.lower(first),
+                func.lower(Employee.last_name) == func.lower(last),
+            )
+        )
+        if employee:
+            return employee
+
+    # 7. Try matching by first name only (if query is a single word)
+    if len(parts2) == 1:
+        employee = db.scalar(
+            base_employee_query().where(
+                or_(
+                    func.lower(Employee.first_name) == func.lower(query),
+                    func.lower(Employee.last_name) == func.lower(query),
+                )
+            )
+        )
+        if employee:
+            return employee
+
     return None
 
 
@@ -234,6 +320,7 @@ def update_employee_fields(db: Session, employee_id: UUID, fields: dict[str, Any
         "pan_number",
         "aadhaar_number",
         "uan_number",
+        "seat_label",
     }
     old_value = employee_profile(employee)
     for key, value in fields.items():
@@ -243,6 +330,17 @@ def update_employee_fields(db: Session, employee_id: UUID, fields: dict[str, Any
     db.flush()
     db.refresh(employee)
     return employee, old_value, employee_profile(employee)
+
+
+def generate_next_employee_code(db: Session) -> str:
+    latest = db.scalar(
+        select(Employee.employee_code)
+        .where(Employee.employee_code.op("~")(r"^EMP\d+$"))
+        .order_by(func.length(Employee.employee_code).desc(), Employee.employee_code.desc())
+        .limit(1)
+    )
+    next_number = int(latest[3:]) + 1 if latest else 1
+    return f"EMP{next_number:04d}"
 
 
 def create_employee_draft(db: Session, payload: dict[str, Any]) -> tuple[Employee, dict[str, Any]]:
@@ -289,6 +387,7 @@ def create_employee_draft(db: Session, payload: dict[str, Any]) -> tuple[Employe
         pan_number=payload.get("pan_number") or None,
         aadhaar_number=payload.get("aadhaar_number") or None,
         uan_number=payload.get("uan_number") or None,
+        seat_label=payload.get("seat_label") or None,
     )
     db.add(employee)
     db.flush()

@@ -32,15 +32,23 @@ from app.core.config import settings
 from app.models.agents import AgentRun, AgentRunStatus, AgentStepStatus
 
 
-# --- ONBOARDING TEMPORARILY DISABLED -----------------------------------------
-# The onboarding_agent import above and its registration in
-# register_placeholder_agents() below are intentionally KEPT (not commented
-# out). Every routing path that could dispatch a command to onboarding_agent
-# is commented out instead (see CRITICAL_ACTION_KEYWORDS, _route_from_extraction,
-# and the keyword branches in _analyze_intent). This way agent_registry.get(
-# "onboarding_agent") never raises, even if something unexpected still resolves
-# to that agent name — it just can no longer be reached via chat commands.
-# To re-enable: uncomment the marked lines below.
+# --- ONBOARDING ROUTING: PARTIALLY RE-ENABLED (B-agent-2) --------------------
+# Per the onboarding implementation plan, only the _route_from_extraction
+# mapping below is re-enabled. The natural-language extractor already
+# classifies onboarding commands at high confidence (see
+# shared/natural_language.py), so submit_command's
+# `route = ... self._route_from_extraction(extraction) or fallback_route`
+# resolves onboarding through extraction alone; the keyword-based fallback
+# paths in CRITICAL_ACTION_KEYWORDS and _analyze_intent are intentionally
+# left commented out (unreached in the normal case, kept as documented
+# fallback wiring if ever needed).
+#
+# B-agent-3: _has_active_onboarding_finishing is a live fallback check (not
+# commented out like the draft/keyword paths above). It exists so a bare
+# continuation reply during the post-creation finishing loop (a seat like
+# "A-3", or "yes" to send the welcome mail) - which the NL extractor cannot
+# classify as an "onboarding" intent on its own - still falls back to
+# onboarding_agent instead of the generic employee-search default.
 # -------------------------------------------------------------------------------
 
 CRITICAL_ACTION_KEYWORDS = {
@@ -478,10 +486,8 @@ class CoordinatorRuntimeService:
             "revise_salary": ("salary_assignment_agent", "revise", "salary_assignment", "revise"),
             "generate_payroll": ("payroll_agent", "process", "payroll", "process"),
             "inspect_payroll": ("payroll_agent", "inspect", "payroll", "inspect"),
-            # ONBOARDING DISABLED: AI-extracted intent "onboarding" no longer maps to a
-            # route, so _route_from_extraction returns None for it and submit_command
-            # falls through to the (also-disabled) keyword fallback in _analyze_intent.
-            # "onboarding": ("onboarding_agent", "start", "onboarding", "start"),
+            # ONBOARDING RE-ENABLED (B-agent-2):
+            "onboarding": ("onboarding_agent", "start", "onboarding", "start"),
         }
         selected = routes.get(extraction.intent)
         if not selected:
@@ -516,6 +522,14 @@ class CoordinatorRuntimeService:
         normalized = command.lower()
         if normalized.strip() in {"yes", "no", "confirm", "proceed", "apply", "save", "cancel", "yes update", "do not update", "don't update"} and self._has_active_employee_confirmation(user_id):
             return self._route("employee_agent", "confirm_update", "employee", "inspect", "employee update confirmation")
+
+        # B-agent-3: bare continuation replies during the post-creation finishing loop
+        # (a seat like "A-3", or "yes"/"confirm" to send the welcome mail) won't classify
+        # as an "onboarding" intent through the NL extractor on their own, so this fallback
+        # keeps routing them back to onboarding_agent until the loop reports completed.
+        if self._has_active_onboarding_finishing(user_id):
+            return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding finishing conversation")
+
         # ONBOARDING DISABLED:
         # if "onboard" in normalized or "start onboarding" in normalized or "hire " in normalized:
         #     return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding")
@@ -644,6 +658,25 @@ class CoordinatorRuntimeService:
             response = result.get("structured_response") or {}
             if response.get("type") in {"missing_fields", "onboarding_summary"}:
                 return not response.get("started")
+        return False
+
+    def _has_active_onboarding_finishing(self, user_id: UUID | None) -> bool:
+        # B-agent-3: mirrors _has_active_onboarding_draft's shape exactly, but scans for
+        # the "onboarding_finishing" structured_response type emitted by the post-creation
+        # documents/seating/welcome_mail loop instead of the pre-creation draft types.
+        if not user_id:
+            return False
+        runs = self.db.scalars(
+            select(AgentRun)
+            .where(AgentRun.agent_name == "coordinator_agent", AgentRun.requested_by == user_id)
+            .order_by(AgentRun.created_at.desc())
+            .limit(8)
+        )
+        for run in runs:
+            result = (run.metadata_json or {}).get("result") or {}
+            response = result.get("structured_response") or {}
+            if response.get("type") == "onboarding_finishing":
+                return not response.get("completed")
         return False
 
     def _has_active_employee_confirmation(self, user_id: UUID | None) -> bool:

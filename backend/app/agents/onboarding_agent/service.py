@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.onboarding_agent.schemas import OnboardingStepStatus
 from app.agents.onboarding_agent.tools import ASSET_CHECKLIST, DOCUMENT_CHECKLIST, candidate_to_payload, create_candidate_profile, parsed_from_command
-from app.agents.employee_agent.tools import create_employee_draft, employee_display_name, employee_profile, find_one_employee
-from app.agents.salary_assignment_agent.services import SalaryAssignmentService
+from app.agents.employee_agent.tools import create_employee_draft, employee_display_name, employee_profile, find_one_employee, get_employee_by_id, update_employee_fields
 from app.agents.shared.extraction import extract_onboarding_entities, is_onboarding_intent, is_start_confirmation, merge_entities, missing_onboarding_fields
 from app.agents.shared import approval_guard
 from app.agents.shared.base_agent import BaseAgent
@@ -19,10 +18,14 @@ from app.agents.shared.runtime_context import RuntimeContext
 from app.models.agents import AgentRun
 from app.models.audit import AuditLog
 from app.models.employee import Department, Designation, Employee, EmployeeAsset, Notification
+from app.services.onboarding_progress import compute_onboarding_progress
 
 logger = logging.getLogger(__name__)
 
 OPTIONAL_ONBOARDING_FIELDS = {"designation", "department"}
+
+FINISHING_STEP_ORDER = ["documents", "seating", "welcome_mail"]
+FINISHING_AFFIRMATIVE_REPLIES = {"yes", "y", "send", "confirm", "proceed", "send it", "go ahead", "yes send"}
 
 
 class OnboardingAgent(BaseAgent):
@@ -43,6 +46,12 @@ class OnboardingAgent(BaseAgent):
         return self.execute(command=payload.get("command", ""), user_id=context.user_id, workflow_id=context.workflow_id)
 
     def execute(self, *, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
+        finishing_employee_id = _latest_onboarding_finishing_employee_id(self.db, user_id)
+        if finishing_employee_id:
+            employee = get_employee_by_id(self.db, finishing_employee_id)
+            if employee:
+                return self._continue_finishing(employee=employee, command=command, user_id=user_id, workflow_id=workflow_id)
+
         latest_draft = _latest_onboarding_draft(self.db, user_id)
         extracted = extract_onboarding_entities(command)
         base_draft = None if is_onboarding_intent(command) and not is_start_confirmation(command) else latest_draft
@@ -84,7 +93,33 @@ class OnboardingAgent(BaseAgent):
     def _start_onboarding(self, *, parsed: dict[str, Any], command: str, user_id: UUID | None, workflow_id: str, conversational: bool) -> dict[str, Any]:
         candidate = create_candidate_profile(self.db, parsed)
         candidate_payload = candidate_to_payload(candidate)
-        candidate_payload.update({key: parsed.get(key) for key in ("designation", "department", "manager", "joining_date", "salary", "salary_structure", "employment_type", "location", "experience", "shift", "address", "dob", "employee_code", "pan_number", "aadhaar_number") if parsed.get(key)})
+        candidate_payload.update(
+            {
+                key: parsed.get(key)
+                for key in (
+                    "designation",
+                    "department",
+                    "manager",
+                    "joining_date",
+                    "salary",
+                    "salary_structure",
+                    "employment_type",
+                    "location",
+                    "experience",
+                    "shift",
+                    "address",
+                    "dob",
+                    "employee_code",
+                    "pan_number",
+                    "aadhaar_number",
+                    "bank_account_number",
+                    "ifsc_code",
+                    "uan_number",
+                    "gender",
+                )
+                if parsed.get(key)
+            }
+        )
         candidate_payload["field_sources"] = parsed.get("field_sources") or _default_field_sources(candidate_payload, "user_input")
         onboarding_payload = {
             "command": command,
@@ -105,44 +140,99 @@ class OnboardingAgent(BaseAgent):
             payload=onboarding_payload,
             performed_by=user_id,
         )
-        salary_approval_id = _request_salary_approval_if_needed(
-            self.db,
-            employee=employee_result["employee"],
-            candidate=candidate_payload,
-            command=command,
-            user_id=user_id,
-            workflow_id=workflow_id,
-        )
         self.db.commit()
-        has_salary_approval = salary_approval_id is not None
+
+        employee = get_employee_by_id(self.db, UUID(employee_result["employee"]["id"]))
+        return self._finishing_turn_result(
+            employee=employee,
+            command=command,
+            workflow_id=workflow_id,
+            message_prefix=f"Done. {employee_result['employee']['name']} has been onboarded successfully.",
+        )
+
+    def _continue_finishing(self, *, employee: Employee, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
+        progress = compute_onboarding_progress(self.db, employee)
+        pending_step = _first_pending_finishing_step(progress)
+
+        if pending_step == "seating":
+            seat = extract_onboarding_entities(command).get("seat")
+            if seat:
+                employee, old_value, new_value = update_employee_fields(self.db, employee.id, {"seat_label": seat})
+                self.db.add(
+                    AuditLog(
+                        entity_type="employee",
+                        entity_id=employee.id,
+                        action="employee.seat_assigned",
+                        old_value={"seat_label": old_value.get("seat_label")},
+                        new_value={"seat_label": new_value.get("seat_label")},
+                        performed_by=user_id,
+                    )
+                )
+                self.db.commit()
+                self.db.refresh(employee)
+        elif pending_step == "welcome_mail":
+            if _is_affirmative(command) and progress["welcome_kit_ready"] and employee.welcome_kit_sent_at is None:
+                employee.welcome_kit_sent_at = datetime.now(timezone.utc)
+                self.db.add(
+                    AuditLog(
+                        entity_type="employee",
+                        entity_id=employee.id,
+                        action="employee.welcome_kit_sent",
+                        new_value={"welcome_kit_sent_at": employee.welcome_kit_sent_at.isoformat()},
+                        performed_by=user_id,
+                    )
+                )
+                self.db.commit()
+                self.db.refresh(employee)
+        # documents: nothing to parse from free text. A synthetic continuation ping sent
+        # right after a successful upload will already see documents_complete == True in
+        # the fresh progress computed below, so it falls through to the next step on its own.
+
+        return self._finishing_turn_result(employee=employee, command=command, workflow_id=workflow_id)
+
+    def _finishing_turn_result(self, *, employee: Employee, command: str, workflow_id: str, message_prefix: str | None = None) -> dict[str, Any]:
+        progress = compute_onboarding_progress(self.db, employee)
+        next_step = _first_pending_finishing_step(progress)
+
+        if next_step is None:
+            message = f"Onboarding complete — {employee_display_name(employee)} is now in Employees."
+            if message_prefix:
+                message = f"{message_prefix} {message}"
+            completed = True
+            awaiting_upload = None
+        else:
+            step_prompt = _finishing_step_prompt(next_step, employee)
+            message = f"{message_prefix} {step_prompt}" if message_prefix else step_prompt
+            completed = False
+            awaiting_upload = {"employee_id": str(employee.id), "document_type": "Identity Document"} if next_step == "documents" else None
+
+        structured_response: dict[str, Any] = {
+            "type": "onboarding_finishing",
+            "title": "Onboarding complete" if completed else "Finishing onboarding",
+            "summary": message,
+            "employee_id": str(employee.id),
+            "candidate": employee_profile(employee),
+            "progress": progress,
+            "completed": completed,
+        }
+        if awaiting_upload:
+            structured_response["awaiting_upload"] = awaiting_upload
+
         return {
             "agent": self.name,
             "agent_display_name": "Onboarding Agent",
-            "action": "start",
-            "message": (
-                f"Done. {employee_result['employee']['name']} has been onboarded successfully. Salary approval is waiting for review."
-                if has_salary_approval
-                else f"Done. {employee_result['employee']['name']} has been onboarded successfully."
-            ),
+            "action": "finishing_complete" if completed else "finishing",
+            "message": message,
             "operation_summary": "Onboarding workflow",
-            "execution_status": "Completed" if not has_salary_approval else "Salary Approval Required",
-            "workflow_status": "Completed" if not has_salary_approval else "Waiting for Approval",
-            "execution_summary": "Employee record was created and onboarding tasks were generated.",
-            "next_actions": "Open Employees to review the new employee record." if not has_salary_approval else "Review the salary approval before applying compensation.",
-            "approval_request_id": salary_approval_id,
-            "structured_response": onboarding_response(
-                title="Onboarding completed",
-                summary="Employee record was created and downstream onboarding tasks were generated."
-                if not has_salary_approval
-                else "Employee record was created. The salary amount is pending approval before it is applied.",
-                candidate={**candidate_payload, **employee_result["employee"]},
-                approval_request_id=salary_approval_id,
-                completed=True,
-                include_resume_step=bool(candidate_payload.get("resume_uploaded")),
-                conversational=conversational,
-            ),
+            "execution_status": "Completed" if completed else "Needs Details",
+            "workflow_status": "Completed" if completed else "Awaiting Details",
+            "execution_summary": "Employee record was created and onboarding tasks were generated." if completed else "Waiting on remaining onboarding steps.",
+            "next_actions": "Open Employees to review the new employee record." if completed else "Reply with the requested detail or attach the document.",
+            "approval_request_id": None,
+            "structured_response": structured_response,
+            "command": command,
             "workflow_id": workflow_id,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat() if completed else None,
         }
 
 
@@ -239,6 +329,14 @@ def _create_employee_from_onboarding(
             "department_id": department.id if department else None,
             "designation_id": designation.id if designation else None,
             "reporting_manager_id": manager.id if manager else None,
+            "current_salary": candidate.get("salary"),
+            "dob": candidate.get("dob"),
+            "gender": candidate.get("gender"),
+            "bank_account_number": candidate.get("bank_account_number"),
+            "ifsc_code": candidate.get("ifsc_code"),
+            "pan_number": candidate.get("pan_number"),
+            "aadhaar_number": candidate.get("aadhaar_number"),
+            "uan_number": candidate.get("uan_number"),
         },
     )
     for asset in assets:
@@ -283,124 +381,6 @@ def _split_name(name: str | None) -> tuple[str, str]:
     if not parts:
         return "", ""
     return parts[0], " ".join(parts[1:]) if len(parts) > 1 else ""
-
-
-def _request_salary_approval_if_needed(
-    db: Session,
-    *,
-    employee: dict[str, Any],
-    candidate: dict[str, Any],
-    command: str,
-    user_id: UUID | None,
-    workflow_id: str,
-) -> str | None:
-    salary = candidate.get("salary")
-    if salary in (None, "", []):
-        return None
-    salary_structure = candidate.get("salary_structure")
-    if salary_structure:
-        salary_assignment_approval_id = _request_salary_assignment_approval(
-            db,
-            employee=employee,
-            candidate=candidate,
-            command=command,
-            user_id=user_id,
-            workflow_id=workflow_id,
-        )
-        if salary_assignment_approval_id:
-            return salary_assignment_approval_id
-    payload = {
-        "command": command,
-        "action": "update_salary",
-        "requested_at": datetime.now(timezone.utc).isoformat(),
-        "employee_id": employee.get("id"),
-        "employee_name": employee.get("name"),
-        "field": "current_salary",
-        "current_value": employee.get("salary"),
-        "proposed_value": salary,
-        "fields": {"current_salary": salary},
-        "source": "onboarding_agent",
-    }
-    return approval_guard.require_approval(
-        module_name="employee",
-        action_name="update_salary",
-        payload_json=payload,
-        approval_reason="Salary assignment requires human approval before it is applied.",
-        requested_by=str(user_id) if user_id else None,
-        workflow_id=workflow_id,
-        workflow_state_json={
-            "workflow_id": workflow_id,
-            "agent_name": "onboarding_agent",
-            "action": "salary_approval",
-            "employee": employee,
-            "approval_status": "PENDING",
-        },
-        db=db,
-    )
-
-
-def _request_salary_assignment_approval(
-    db: Session,
-    *,
-    employee: dict[str, Any],
-    candidate: dict[str, Any],
-    command: str,
-    user_id: UUID | None,
-    workflow_id: str,
-) -> str | None:
-    employee_id = employee.get("id")
-    if not employee_id:
-        return None
-    employee_model = db.get(Employee, UUID(str(employee_id)))
-    if not employee_model:
-        return None
-    service = SalaryAssignmentService(db)
-    structure = service.find_structure(str(candidate.get("salary_structure") or ""))
-    if not structure:
-        logger.warning("Salary structure not found during onboarding salary assignment: %s", candidate.get("salary_structure"))
-        return None
-    try:
-        gross_salary = float(str(candidate.get("salary")).replace(",", ""))
-    except (TypeError, ValueError):
-        return None
-    effective_from = _effective_from(candidate.get("joining_date"))
-    assignment = service.create_pending_assignment(
-        employee=employee_model,
-        structure=structure,
-        gross_salary=gross_salary,
-        effective_from=effective_from,
-        requested_by=user_id,
-        reason=command,
-    )
-    summary = service.assignment_summary(assignment, employee=employee_model, structure=structure)
-    breakup = service.calculate_breakup(structure, gross_salary)
-    payload = {
-        "assignment_id": str(assignment.id),
-        "employee_id": str(employee_model.id),
-        "salary_structure_id": str(structure.id),
-        "summary": summary,
-        "breakup": breakup,
-        "source": "onboarding_agent",
-    }
-    return approval_guard.require_approval(
-        module_name="salary_assignment",
-        action_name="activate",
-        payload_json=payload,
-        approval_reason="Salary assignment requires approval before activation.",
-        requested_by=str(user_id) if user_id else None,
-        workflow_id=workflow_id,
-        workflow_state_json={"workflow_id": workflow_id, "agent_name": "onboarding_agent", "action": "salary_assignment", "payload_json": payload},
-        db=db,
-    )
-
-
-def _effective_from(value: Any) -> date:
-    if not value:
-        return date.today()
-    try:
-        return date.fromisoformat(str(value))
-    except ValueError:
-        return date.today()
 
 
 def _unique_employee_email(db: Session, email: str | None) -> str | None:
@@ -489,6 +469,51 @@ def _latest_onboarding_draft(db: Session, user_id: UUID | None) -> dict[str, Any
                 draft["field_sources"] = response.get("field_sources")
             return draft
     return None
+
+
+def _latest_onboarding_finishing_employee_id(db: Session, user_id: UUID | None) -> UUID | None:
+    if not user_id:
+        return None
+    rows = db.scalars(
+        select(AgentRun)
+        .where(AgentRun.requested_by == user_id, AgentRun.agent_name == "coordinator_agent")
+        .order_by(AgentRun.created_at.desc())
+        .limit(8)
+    )
+    for run in rows:
+        result = (run.metadata_json or {}).get("result") or {}
+        response = result.get("structured_response") or {}
+        if response.get("type") == "onboarding_finishing" and not response.get("completed"):
+            employee_id = response.get("employee_id")
+            if employee_id:
+                try:
+                    return UUID(str(employee_id))
+                except ValueError:
+                    return None
+    return None
+
+
+def _first_pending_finishing_step(progress: dict[str, Any]) -> str | None:
+    items_by_key = {item["key"]: item for item in progress["items"]}
+    for step in FINISHING_STEP_ORDER:
+        item = items_by_key.get(step)
+        if item and not item["complete"]:
+            return step
+    return None
+
+
+def _is_affirmative(command: str) -> bool:
+    return command.strip().lower() in FINISHING_AFFIRMATIVE_REPLIES
+
+
+def _finishing_step_prompt(step: str, employee: Employee) -> str:
+    if step == "documents":
+        return f"Please attach an identity document (PAN, Aadhaar, etc.) for {employee_display_name(employee)} to verify."
+    if step == "seating":
+        return "Reply with a seat like A-3 to assign a desk."
+    if step == "welcome_mail":
+        return "Ready to send the welcome mail? Reply yes to confirm."
+    return "Continuing onboarding."
 
 
 def _missing_field_response(*, draft: dict[str, Any], field_sources: dict[str, str], missing_fields: list[str], command: str, workflow_id: str) -> dict[str, Any]:

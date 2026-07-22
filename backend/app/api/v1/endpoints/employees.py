@@ -1,6 +1,6 @@
 from typing import Any
-
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,13 +8,25 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.agents.employee_agent.tools import create_employee_draft, deactivate_employee, employee_profile, employee_to_summary, get_employee_by_id, list_employees, search_employees, soft_delete_employee, update_employee_fields
+from app.agents.employee_agent.tools import (
+    create_employee_draft,
+    deactivate_employee,
+    employee_profile,
+    employee_to_summary,
+    generate_next_employee_code,
+    get_employee_by_id,
+    list_employees,
+    search_employees,
+    soft_delete_employee,
+    update_employee_fields,
+)
 from app.api.deps import get_current_user, require_permissions
 from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.auth import User
 from app.models.employee import Department, Designation, Employee
 from app.services.onboarding_progress import compute_onboarding_progress
+from app.services.email_service import send_welcome_email  # <-- NEW import
 
 router = APIRouter()
 
@@ -50,6 +62,8 @@ class EmployeeCreateRequest(BaseModel):
     pan_number: str | None = None
     aadhaar_number: str | None = None
     uan_number: str | None = None
+    current_salary: Decimal | None = None
+    emergency_contact: dict[str, Any] | None = None
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -72,6 +86,12 @@ class EmployeeUpdateRequest(BaseModel):
     pan_number: str | None = None
     aadhaar_number: str | None = None
     uan_number: str | None = None
+    current_salary: Decimal | None = None
+    seat_label: str | None = None
+
+
+class SeatAssignmentRequest(BaseModel):
+    seat_label: str
 
 
 @router.get("", response_model=EmployeeListResponse, dependencies=[Depends(require_permissions("employees:view"))])
@@ -90,7 +110,9 @@ def employees(
 
     items = []
     for employee in records:
-        items.append(_without_salary(employee_to_summary(employee)))
+        summary = _without_salary(employee_to_summary(employee))
+        summary["onboarding_percent"] = compute_onboarding_progress(db, employee)["percent"]
+        items.append(summary)
     return EmployeeListResponse(
         items=items,
         total=total,
@@ -116,7 +138,9 @@ def employee_detail(employee_id: UUID, db: Session = Depends(get_db)):
     employee = get_employee_by_id(db, employee_id)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
-    return _without_salary(employee_profile(employee))
+    payload = _without_salary(employee_profile(employee))
+    payload["current_salary"] = float(employee.current_salary) if employee.current_salary is not None else None
+    return payload
 
 
 @router.get("/{employee_id}/onboarding-progress", dependencies=[Depends(require_permissions("employees:view"))])
@@ -133,16 +157,32 @@ def send_welcome_kit(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Send the welcome email to the employee and stamp the welcome_kit_sent_at timestamp.
+    Requires that all other onboarding steps are complete.
+    """
     employee = get_employee_by_id(db, employee_id)
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
     progress = compute_onboarding_progress(db, employee)
     if not progress["welcome_kit_ready"]:
-        raise HTTPException(status_code=400, detail="Complete the remaining onboarding steps before sending the welcome kit.")
+        raise HTTPException(
+            status_code=400,
+            detail="Complete the remaining onboarding steps before sending the welcome kit."
+        )
     if employee.welcome_kit_sent_at is not None:
         raise HTTPException(status_code=400, detail="Welcome kit was already sent.")
 
+    # Send the actual email
+    sent = send_welcome_email(employee)
+    if not sent:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send welcome email. Please check the server logs for details."
+        )
+
+    # Only stamp if email was sent successfully
     employee.welcome_kit_sent_at = datetime.now(timezone.utc)
     db.add(
         AuditLog(
@@ -157,6 +197,32 @@ def send_welcome_kit(
     return compute_onboarding_progress(db, employee)
 
 
+@router.post("/{employee_id}/seat", dependencies=[Depends(require_permissions("employees:manage"))])
+def assign_employee_seat(
+    employee_id: UUID,
+    payload: SeatAssignmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        employee, old_value, new_value = update_employee_fields(db, employee_id, {"seat_label": payload.seat_label})
+        db.add(
+            AuditLog(
+                entity_type="employee",
+                entity_id=employee.id,
+                action="employee.seat_assigned",
+                old_value={"seat_label": old_value.get("seat_label")},
+                new_value={"seat_label": new_value.get("seat_label")},
+                performed_by=current_user.id,
+            )
+        )
+        db.commit()
+        return compute_onboarding_progress(db, employee)
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("", dependencies=[Depends(require_permissions("employees:manage"))])
 def create_employee(
     payload: EmployeeCreateRequest,
@@ -164,7 +230,10 @@ def create_employee(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        employee, snapshot = create_employee_draft(db, payload.model_dump())
+        data = payload.model_dump()
+        if not (data.get("employee_code") or "").strip():
+            data["employee_code"] = generate_next_employee_code(db)
+        employee, snapshot = create_employee_draft(db, data)
         db.add(
             AuditLog(
                 entity_type="employee",
@@ -203,7 +272,9 @@ def update_employee(
             )
         )
         db.commit()
-        return _without_salary(new_value)
+        payload = _without_salary(new_value)
+        payload["current_salary"] = float(employee.current_salary) if employee.current_salary is not None else None
+        return payload
     except (LookupError, ValueError) as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

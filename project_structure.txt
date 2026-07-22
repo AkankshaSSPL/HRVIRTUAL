@@ -1,9 +1,13 @@
 Folder PATH listing
-Volume serial number is 000000CC 2C52:297F
+Volume serial number is 000000A0 2C52:297F
 C:.
 |   .gitignore
+|   backend-root.zip
+|   hrms_db.sql
 |   project_structure.txt
 |   README.md
+|   root-working-hrms.zip
+|   uizip.zip
 |   
 +---backend
 |   |   .env
@@ -40,6 +44,7 @@ C:.
 |   |   |   |   20260612_0022_dynamic_lookup_values.py
 |   |   |   |   20260612_0023_expand_master_lookups.py
 |   |   |   |   20260612_0024_department_active_status.py
+|   |   |   |   20260720_0025_add_employee_welcome_kit_sent_at.py
 |   |   |   |   
 |   |   |   \---__pycache__
 |   |   |           20260528_0001_initial_foundation.cpython-312.pyc
@@ -66,6 +71,7 @@ C:.
 |   |   |           20260612_0022_dynamic_lookup_values.cpython-312.pyc
 |   |   |           20260612_0023_expand_master_lookups.cpython-312.pyc
 |   |   |           20260612_0024_department_active_status.cpython-312.pyc
+|   |   |           20260720_0025_add_employee_welcome_kit_sent_at.cpython-312.pyc
 |   |   |           
 |   |   \---__pycache__
 |   |           env.cpython-310.pyc
@@ -467,12 +473,14 @@ C:.
 |   |   +---services
 |   |   |   |   auth_service.py
 |   |   |   |   lop_calculator.py
+|   |   |   |   onboarding_progress.py
 |   |   |   |   payroll_preparation_service.py
 |   |   |   |   __init__.py
 |   |   |   |   
 |   |   |   \---__pycache__
 |   |   |           auth_service.cpython-312.pyc
 |   |   |           lop_calculator.cpython-312.pyc
+|   |   |           onboarding_progress.cpython-312.pyc
 |   |   |           payroll_preparation_service.cpython-312.pyc
 |   |   |           __init__.cpython-312.pyc
 |   |   |           
@@ -487,15 +495,19 @@ C:.
 |   |           __init__.cpython-310.pyc
 |   |           __init__.cpython-312.pyc
 |   |           
-|   \---scripts
-|       |   cleanup_onboarding_data.py
-|       |   seed_auth.py
-|       |   smoke_agent_command.py
-|       |   smoke_agent_runtime.py
-|       |   smoke_approval_engine.py
-|       |   
-|       \---__pycache__
-|               seed_auth.cpython-312.pyc
+|   +---scripts
+|   |   |   cleanup_onboarding_data.py
+|   |   |   seed_auth.py
+|   |   |   smoke_agent_command.py
+|   |   |   smoke_agent_runtime.py
+|   |   |   smoke_approval_engine.py
+|   |   |   
+|   |   \---__pycache__
+|   |           seed_auth.cpython-312.pyc
+|   |           
+|   \---uploads
+|       \---documents
+|               06df780b-f975-4ecb-a845-81a99c61dc5b.png
 |               
 +---frontend
 |   |   .env.example
@@ -12961,6 +12973,7 @@ C:.
 |       |       AttendancePage.tsx
 |       |       DashboardPage.tsx
 |       |       DocumentsPage.tsx
+|       |       EmployeeProfilePage.tsx
 |       |       EmployeesPage.tsx
 |       |       LeavePage.tsx
 |       |       LoginPage.tsx

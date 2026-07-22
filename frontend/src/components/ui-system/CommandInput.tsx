@@ -12,9 +12,20 @@ type CommandInputProps = {
   onAttach?: (file: File) => void;
   draftValue?: string;
   onDraftConsumed?: () => void;
+  accept?: string; // <-- NEW: dynamic accept for file input
 };
 
-export function CommandInput({ placeholder = "Issue an HR operations command", onSend, disabled = false, loading = false, error, onAttach, draftValue, onDraftConsumed }: CommandInputProps) {
+export function CommandInput({
+  placeholder = "Issue an HR operations command",
+  onSend,
+  disabled = false,
+  loading = false,
+  error,
+  onAttach,
+  draftValue,
+  onDraftConsumed,
+  accept = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document", // default
+}: CommandInputProps) {
   const [value, setValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -51,7 +62,7 @@ export function CommandInput({ placeholder = "Issue an HR operations command", o
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept={accept} // <-- dynamic accept
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];

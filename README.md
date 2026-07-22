@@ -7,8 +7,9 @@ python -m venv venv
 venv\Scripts\activate
 .\\.venv\\Scripts\\Activate.ps1
 
-c:\VirtualHR\venv\Scripts\activate.bat
 
+c:\VirtualHR\venv\Scripts\activate.bat
+"C:\VirtualHR - Copy\venv\Scripts\activate.bat"
 pip install -r requirements.txt
 alembic upgrade head
 python scripts/seed_auth.py

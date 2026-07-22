@@ -14,6 +14,7 @@ export type EmployeeRecord = {
   joining_date?: string | null;
   official_email?: string | null;
   salary?: string | null;
+  current_salary?: number | null;
   personal_email?: string | null;
   phone?: string | null;
   dob?: string | null;
@@ -26,6 +27,8 @@ export type EmployeeRecord = {
   department_id?: string | null;
   designation_id?: string | null;
   reporting_manager_id?: string | null;
+  seat_label?: string | null;
+  onboarding_percent?: number | null;
 };
 
 export type EmployeeFormOptions = {
@@ -54,6 +57,8 @@ export type EmployeeCreatePayload = {
   pan_number?: string;
   aadhaar_number?: string;
   uan_number?: string;
+  current_salary?: number;
+  emergency_contact?: Record<string, unknown>;
 };
 
 export type EmployeeListResponse = {
@@ -112,4 +117,28 @@ export function sendWelcomeKit(employeeId: string) {
 
 export function deactivateEmployee(employeeId: string) {
   return apiPost<EmployeeRecord>(`/employees/${employeeId}/deactivate`, {});
+}
+
+export function setEmployeeSeat(employeeId: string, seatLabel: string) {
+  return apiPost<OnboardingProgress>(`/employees/${employeeId}/seat`, { seat_label: seatLabel });
+}
+
+export type EmployeeDocumentRecord = {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  document_type: string;
+  document_url: string;
+  status: string;
+  expiry_date?: string | null;
+  verified_at?: string | null;
+  created_at?: string | null;
+};
+
+export function uploadEmployeeDocument(employeeId: string, documentType: string, file: File) {
+  const formData = new FormData();
+  formData.append("employee_id", employeeId);
+  formData.append("document_type", documentType);
+  formData.append("file", file);
+  return apiPost<EmployeeDocumentRecord>("/documents", formData);
 }

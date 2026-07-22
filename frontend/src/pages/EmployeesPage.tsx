@@ -55,7 +55,10 @@ export function EmployeesPage() {
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
   });
-  const employees = employeesQuery.data?.items ?? [];
+  const employees = useMemo(
+    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) === 100),
+    [employeesQuery.data],
+  );
   const latestEmployee = useMemo(() => employees[0], [employees]);
 
   return (

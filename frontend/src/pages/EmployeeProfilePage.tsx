@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import { ArrowLeft, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { EmployeeEditDrawer } from "@/components/employees/EmployeeEditDrawer";
+import { OnboardingProgressBar } from "@/components/employees/OnboardingProgressBar";
+import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 import { AppLayout, ConfirmDialog, EmployeeProfileDrawer, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
 import { deactivateEmployee, getEmployee, getEmployeeOnboardingProgress, sendWelcomeKit, type OnboardingProgress } from "@/services/employees";
@@ -14,12 +15,14 @@ function OnboardingProgressPanel({
   progress,
   activeTab,
   onSelectStep,
+  onOpenSeatAssignment,
   onSendWelcomeKit,
   sendingWelcomeKit,
 }: {
   progress: OnboardingProgress;
   activeTab: string;
   onSelectStep: (tab: string) => void;
+  onOpenSeatAssignment: () => void;
   onSendWelcomeKit: () => void;
   sendingWelcomeKit: boolean;
 }) {
@@ -35,13 +38,8 @@ function OnboardingProgressPanel({
         <span className="text-2xl font-bold tabular-nums text-primary">{progress.percent}%</span>
       </div>
 
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-        <motion.div
-          className="h-full rounded-full bg-primary"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress.percent}%` }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-        />
+      <div className="mt-3">
+        <OnboardingProgressBar percent={progress.percent} />
       </div>
 
       <div className="relative mt-6">
@@ -50,11 +48,26 @@ function OnboardingProgressPanel({
           {progress.items.map((item, index) => {
             const stepTab = item.tab;
             const isActive = stepTab === activeTab;
+
+            function handleStepClick() {
+              if (item.key === "seating") {
+                onOpenSeatAssignment();
+                return;
+              }
+              if (item.key === "welcome_mail") {
+                if (progress.welcome_kit_ready && !item.complete) {
+                  onSendWelcomeKit();
+                }
+                return;
+              }
+              onSelectStep(stepTab);
+            }
+
             return (
               <button
                 key={item.key}
                 type="button"
-                onClick={() => onSelectStep(stepTab)}
+                onClick={handleStepClick}
                 className="flex flex-1 flex-col items-center text-center focus:outline-none"
               >
                 <div
@@ -79,10 +92,10 @@ function OnboardingProgressPanel({
         </div>
       </div>
 
-      {progress.welcome_kit_ready && !progress.items.find((item) => item.key === "welcome_kit")?.complete ? (
+      {progress.welcome_kit_ready && !progress.items.find((item) => item.key === "welcome_mail")?.complete ? (
         <div className="mt-4 flex justify-end border-t pt-3">
           <Button size="sm" onClick={onSendWelcomeKit} disabled={sendingWelcomeKit}>
-            {sendingWelcomeKit ? "Sending..." : "Send Welcome Kit"}
+            {sendingWelcomeKit ? "Sending..." : "Send Welcome Mail"}
           </Button>
         </div>
       ) : null}
@@ -97,6 +110,7 @@ export function EmployeeProfilePage() {
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [activeTab, setActiveTab] = useState("Personal");
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
 
   const employeeQuery = useQuery({
     queryKey: ["employee", id],
@@ -134,6 +148,7 @@ export function EmployeeProfilePage() {
       progress={progress}
       activeTab={activeTab}
       onSelectStep={setActiveTab}
+      onOpenSeatAssignment={() => setSeatModalOpen(true)}
       onSendWelcomeKit={() => id && welcomeKitMutation.mutate(id)}
       sendingWelcomeKit={welcomeKitMutation.isPending}
     />
@@ -171,6 +186,14 @@ export function EmployeeProfilePage() {
           />
         ) : null}
         <EmployeeEditDrawer employeeId={editingEmployeeId} open={Boolean(editingEmployeeId)} onClose={() => setEditingEmployeeId(null)} />
+        {id ? (
+          <SeatingAllocationModal
+            open={seatModalOpen}
+            employeeId={id}
+            currentSeat={employee?.seat_label}
+            onClose={() => setSeatModalOpen(false)}
+          />
+        ) : null}
         <ConfirmDialog
           open={confirmingDeactivate}
           title="Deactivate employee?"

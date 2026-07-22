@@ -26,6 +26,7 @@ import {
   LoadingSkeleton,
   MissingFieldCard,
   OnboardingProgressCard,
+  OnboardingProgressChecklistCard,
   OnboardingSummaryCard,
   PageContainer,
   PageHeader,
@@ -42,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { getOnboardingStateDebug, getWorkflow, getWorkflows, submitAgentCommand, uploadOnboardingResume, type AgentCommandWorkflow, type RuntimeEvent } from "@/services/agents";
 import { getApproval, type ApprovalRequest } from "@/services/approvals";
 import { useAuthStore } from "@/stores/authStore";
+import { uploadEmployeeDocument } from "@/services/employees"; // <-- NEW
 
 const suggestedActions = [
   "Show employees",
@@ -89,6 +91,10 @@ type StructuredResponse = {
   labels?: string[];
   field_sources?: Record<string, string>;
   status?: string;
+  percent?: number;
+  completed?: string[];
+  pending?: string[];
+  welcome_kit_ready?: boolean;
   component?: {
     id?: string;
     name?: string;
@@ -113,6 +119,7 @@ type StructuredResponse = {
     taxable?: boolean;
     active?: boolean;
   }>;
+  awaiting_upload?: { employee_id: string; document_type: string } | null; // <-- NEW
 };
 
 function formatTime(value: string | null) {
@@ -322,6 +329,17 @@ function BusinessResponse({
     );
   }
   if (structuredResponse?.type === "onboarding_progress") return <OnboardingDoneCard workflow={workflow} structuredResponse={structuredResponse} />;
+  if (structuredResponse?.type === "onboarding_progress_check") {
+    return (
+      <OnboardingProgressChecklistCard
+        title={structuredResponse.title ?? "Onboarding progress"}
+        summary={structuredResponse.summary ?? ""}
+        employee={structuredResponse.employee}
+        percent={structuredResponse.percent ?? 0}
+        items={(structuredResponse.items ?? []) as Array<{ key: string; label: string; complete: boolean; tab?: string }>}
+      />
+    );
+  }
   if (structuredResponse?.type === "approval_diff" || structuredResponse?.type === "approval_diff_card") {
     const payload = structuredResponse.payload ?? {};
     return (
@@ -773,6 +791,9 @@ export function AgentCommandPage() {
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
   const [toast, setToast] = useState<{ title: string; description?: string; type?: "success" | "info" | "error" } | null>(null);
 
+  // NEW: pending upload for document step
+  const [pendingUpload, setPendingUpload] = useState<{ employeeId: string; documentType: string } | null>(null);
+
   const workflowsQuery = useQuery({ queryKey: ["agent-command-workflows"], queryFn: getWorkflows, refetchInterval: 10000 });
   const workflows = useMemo(() => (workflowsQuery.data ?? []).slice(0, 30), [workflowsQuery.data]);
   const selectedFromList = selectedWorkflowId ?? workflows[0]?.workflow_id ?? null;
@@ -790,11 +811,30 @@ export function AgentCommandPage() {
     if (!selectedWorkflowId && workflows[0]?.workflow_id) setSelectedWorkflowId(workflows[0].workflow_id);
   }, [selectedWorkflowId, workflows]);
 
+  // NEW: Detect awaiting_upload from the latest agent message
+  const activeWorkflow = workflowQuery.data ?? workflows.find((workflow) => workflow.workflow_id === selectedFromList) ?? null;
+  useEffect(() => {
+    if (!activeWorkflow) return;
+    const latestAgentMessage = [...activeWorkflow.messages]
+      .reverse()
+      .find((m) => m.type === "workflow_message" || m.type === "agent_message");
+    if (!latestAgentMessage) return;
+    const structured = latestAgentMessage.metadata?.structured_response as StructuredResponse | undefined;
+    if (structured?.awaiting_upload && !pendingUpload) {
+      setPendingUpload(structured.awaiting_upload);
+    }
+    // If no awaiting_upload, we could clear, but we want to keep it until upload or user sends a non-upload command
+  }, [activeWorkflow, pendingUpload]);
+
   const commandMutation = useMutation({
     mutationFn: submitAgentCommand,
     onMutate: (command) => {
       setSendError(null);
       setPendingCommand(command);
+      // If user sends a command that is not the follow-up, clear pending upload
+      if (command !== "I have uploaded the document.") {
+        setPendingUpload(null);
+      }
     },
     onSuccess: async (workflow) => {
       setSelectedWorkflowId(workflow.workflow_id);
@@ -806,6 +846,7 @@ export function AgentCommandPage() {
       await queryClient.invalidateQueries({ queryKey: ["payroll-components"] });
       await queryClient.invalidateQueries({ queryKey: ["payroll-structures"] });
       setPendingCommand(null);
+      // On success, if we just uploaded a document, clear pending upload (already cleared in onMutate if we sent the follow-up)
     },
     onError: (error, command) => {
       setPendingCommand(null);
@@ -814,24 +855,43 @@ export function AgentCommandPage() {
     },
   });
 
-  async function handleResumeUpload(file: File) {
-    try {
-      setUploadingResume(true);
-      setUploadProgress(0);
-      setUploadedCandidate(null);
-      setSendError(null);
-      const response = await uploadOnboardingResume(file, setUploadProgress);
-      setUploadedCandidate(response.candidate as CandidateCardData);
-      setUploadedCommand(response.suggested_command);
-    } catch (error) {
-      setSendError(error instanceof Error ? error.message : "Unable to upload resume");
-    } finally {
-      setUploadingResume(false);
-      setUploadProgress(null);
+  // NEW: Handle file attach – branch for document upload or resume upload
+  async function handleAttach(file: File) {
+    if (pendingUpload) {
+      // Document upload for onboarding step
+      try {
+        setUploadingResume(true);
+        setUploadProgress(0);
+        setSendError(null);
+        await uploadEmployeeDocument(pendingUpload.employeeId, pendingUpload.documentType, file);
+        setPendingUpload(null);
+        // Send follow-up message to continue the agent
+        commandMutation.mutate("I have uploaded the document.");
+      } catch (error) {
+        setSendError(error instanceof Error ? error.message : "Document upload failed");
+      } finally {
+        setUploadingResume(false);
+        setUploadProgress(null);
+      }
+    } else {
+      // Resume upload for new onboarding
+      try {
+        setUploadingResume(true);
+        setUploadProgress(0);
+        setUploadedCandidate(null);
+        setSendError(null);
+        const response = await uploadOnboardingResume(file, setUploadProgress);
+        setUploadedCandidate(response.candidate as CandidateCardData);
+        setUploadedCommand(response.suggested_command);
+      } catch (error) {
+        setSendError(error instanceof Error ? error.message : "Unable to upload resume");
+      } finally {
+        setUploadingResume(false);
+        setUploadProgress(null);
+      }
     }
   }
 
-  const activeWorkflow = workflowQuery.data ?? workflows.find((workflow) => workflow.workflow_id === selectedFromList) ?? null;
   const activeApprovalId = activeWorkflow?.approval_request_id ?? null;
   const activeApprovalQuery = useQuery({
     queryKey: ["approvals", activeApprovalId],
@@ -915,6 +975,9 @@ export function AgentCommandPage() {
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
 
+  // Determine accept for file input based on pendingUpload
+  const fileAccept = pendingUpload ? "image/*,application/pdf" : ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
   return (
     <AppLayout>
       <PageContainer className="max-w-[1180px] gap-4">
@@ -983,7 +1046,7 @@ export function AgentCommandPage() {
 
             {commandMutation.isPending || uploadingResume ? (
               <AgentMessageBubble time="Working" name="HR Assistant" agentName="coordinator_agent">
-                <TypingIndicator label={uploadingResume ? `Reading resume${uploadProgress !== null ? ` (${uploadProgress}%)` : ""}...` : "Working on it..."} />
+                <TypingIndicator label={uploadingResume ? `Uploading${uploadProgress !== null ? ` (${uploadProgress}%)` : ""}...` : "Working on it..."} />
               </AgentMessageBubble>
             ) : null}
 
@@ -1016,7 +1079,17 @@ export function AgentCommandPage() {
           </div>
 
           <div className="sticky bottom-0 border-t bg-background/95 py-4 backdrop-blur">
-            <CommandInput placeholder="Ask for an HR operation. Enter sends, Shift+Enter adds a line." onSend={(value) => commandMutation.mutate(value)} onAttach={handleResumeUpload} loading={commandMutation.isPending || uploadingResume} disabled={commandMutation.isPending || uploadingResume} error={sendError} draftValue={commandDraft} onDraftConsumed={() => setCommandDraft(undefined)} />
+            <CommandInput
+              placeholder={pendingUpload ? "Upload the requested document (image or PDF)" : "Ask for an HR operation. Enter sends, Shift+Enter adds a line."}
+              onSend={(value) => commandMutation.mutate(value)}
+              onAttach={handleAttach}
+              loading={commandMutation.isPending || uploadingResume}
+              disabled={commandMutation.isPending || uploadingResume}
+              error={sendError}
+              draftValue={commandDraft}
+              onDraftConsumed={() => setCommandDraft(undefined)}
+              accept={fileAccept}
+            />
           </div>
         </main>
 

@@ -32,6 +32,7 @@ export type EmployeeCardData = {
   joining_date?: string | null;
   official_email?: string | null;
   salary?: string | null;
+  current_salary?: number | null;
   personal_email?: string | null;
   phone?: string | null;
   dob?: string | null;
@@ -378,6 +379,51 @@ export function OnboardingProgressCard({
         <AssetAllocationCard assets={assets} />
       </div>
       <OfferLetterPreviewCard candidate={candidate} />
+    </div>
+  );
+}
+
+export function OnboardingProgressChecklistCard({
+  title,
+  summary,
+  employee,
+  percent,
+  items,
+}: {
+  title: string;
+  summary: string;
+  employee?: EmployeeCardData | null;
+  percent: number;
+  items: Array<{ key: string; label: string; complete: boolean; tab?: string }>;
+}) {
+  const theme = agentThemeFor("onboarding_agent");
+  return (
+    <div className={cn("space-y-4 rounded-lg border p-4 shadow-sm", theme.soft)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold">{title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+        </div>
+        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-semibold", theme.tint, theme.border, theme.text)}>
+          {percent}%
+        </div>
+      </div>
+      {employee?.name ? (
+        <InlineEntityCard
+          title={employee.name}
+          subtitle={employee.designation ?? "Employee"}
+          meta={employee.department ?? undefined}
+          agent="employee_agent"
+        />
+      ) : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {items.map((item) => (
+          <div key={item.key} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+            <span>{item.label}</span>
+            <StatusBadge status={item.complete ? "Complete" : "Pending"} tone={item.complete ? "success" : "warning"} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -861,6 +907,27 @@ export function EmployeeProfileDrawer({
           ) : null}
           {tab === "Payroll Impact" ? (
             <div className="space-y-4">
+              <div className={cn("rounded-lg border p-4", agentThemeFor("payroll_agent").soft)}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold">Current Salary</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Raw payroll figure used for onboarding and payroll processing.</p>
+                  </div>
+                  {onUpdate ? (
+                    <Button size="sm" variant="outline" onClick={() => onUpdate(profileEmployee ?? employee)}>
+                      Edit
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <InfoCell
+                    label="Current Salary"
+                    value={employee.current_salary != null ? `₹${Number(employee.current_salary).toLocaleString("en-IN")}` : "Not set"}
+                    icon={<BadgeDollarSign className="h-4 w-4" />}
+                    agent="payroll_agent"
+                  />
+                </div>
+              </div>
               {(() => {
                 const payrollReady = Boolean(profileEmployee?.bank_account_number && profileEmployee?.ifsc_code && profileEmployee?.pan_number);
                 return (

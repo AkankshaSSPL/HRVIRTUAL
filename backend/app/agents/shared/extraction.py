@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from typing import Any
 
 
-ONBOARDING_REQUIRED_FIELDS = ["name", "joining_date", "manager"]
+ONBOARDING_REQUIRED_FIELDS = ["name", "joining_date", "manager", "email"]
 
 
 def extract_onboarding_entities(text: str) -> dict[str, Any]:
@@ -26,6 +26,14 @@ def extract_onboarding_entities(text: str) -> dict[str, Any]:
         "shift": _shift(normalized),
         "email": _first(r"[\w.\-+]+@[\w.\-]+\.\w+", normalized),
         "phone": _first(r"(?:\+?\d[\d\s-]{8,}\d)", without_emails),
+        "bank_account_number": _bank_account_number(normalized),
+        "ifsc_code": _ifsc_code(normalized),
+        "pan_number": _pan_number(normalized),
+        "aadhaar_number": _aadhaar_number(normalized),
+        "uan_number": _uan_number(normalized),
+        "dob": _dob(normalized),
+        "gender": _gender(normalized),
+        "seat": _seat(normalized),
         "resume_uploaded": False,
     }
     return {key: value for key, value in entities.items() if value not in (None, "", [])}
@@ -232,11 +240,84 @@ def _shift(text: str) -> str | None:
     return _title(match.group(0)) if match else None
 
 
+def _bank_account_number(text: str) -> str | None:
+    labeled = _labeled_value(text, ("bank account number", "bank account", "account number", "a/c number", "a/c"))
+    if not labeled:
+        return None
+    digits = re.sub(r"[^0-9A-Za-z]", "", labeled)
+    return digits or None
+
+
+def _ifsc_code(text: str) -> str | None:
+    labeled = _labeled_value(text, ("ifsc code", "ifsc"))
+    if labeled:
+        match = re.search(r"[A-Za-z]{4}0[A-Za-z0-9]{6}", labeled)
+        return (match.group(0) if match else labeled.strip()).upper()
+    match = re.search(r"\b[A-Za-z]{4}0[A-Za-z0-9]{6}\b", text)
+    return match.group(0).upper() if match else None
+
+
+def _pan_number(text: str) -> str | None:
+    labeled = _labeled_value(text, ("pan number", "pan"))
+    if labeled:
+        match = re.search(r"[A-Za-z]{5}[0-9]{4}[A-Za-z]", labeled)
+        return (match.group(0) if match else labeled.strip()).upper()
+    match = re.search(r"\b[A-Za-z]{5}[0-9]{4}[A-Za-z]\b", text)
+    return match.group(0).upper() if match else None
+
+
+def _aadhaar_number(text: str) -> str | None:
+    labeled = _labeled_value(text, ("aadhaar number", "aadhaar", "aadhar number", "aadhar"))
+    if not labeled:
+        return None
+    digits = re.sub(r"[^0-9]", "", labeled)
+    return digits or None
+
+
+def _uan_number(text: str) -> str | None:
+    labeled = _labeled_value(text, ("uan number", "uan"))
+    if not labeled:
+        return None
+    digits = re.sub(r"[^0-9]", "", labeled)
+    return digits or None
+
+
+def _dob(text: str) -> str | None:
+    labeled = _labeled_value(text, ("date of birth", "dob"))
+    if not labeled:
+        return None
+    iso_match = re.search(r"\d{4}-\d{2}-\d{2}", labeled)
+    if iso_match:
+        return iso_match.group(0)
+    try:
+        return date.fromisoformat(labeled.strip()).isoformat()
+    except ValueError:
+        return None
+
+
+def _gender(text: str) -> str | None:
+    labeled = _labeled_value(text, ("gender",))
+    if not labeled:
+        return None
+    match = re.search(r"\b(male|female|other)\b", labeled, re.IGNORECASE)
+    return _title(match.group(1)) if match else None
+
+
+def _seat(text: str) -> str | None:
+    labeled = _labeled_value(text, ("seat label", "seat"))
+    if labeled:
+        return labeled.strip().upper()
+    match = re.search(r"\b[A-E]-\d{1,2}\b", text, re.IGNORECASE)
+    return match.group(0).upper() if match else None
+
+
 def _labeled_value(text: str, labels: tuple[str, ...]) -> str | None:
     label_pattern = "|".join(re.escape(label) for label in sorted(labels, key=len, reverse=True))
     stop_labels = (
         "name|designation|desig|role|title|department|dept|manager|reporting manager|reports to|under|"
-        "salary|salary structure|structure|ctc|pay|employee type|employment type|type|location|work location|based in|joining|experience|email|phone|shift|work shift"
+        "salary|salary structure|structure|ctc|pay|employee type|employment type|type|location|work location|based in|joining|experience|email|phone|shift|work shift|"
+        "bank account number|bank account|account number|a/c number|a/c|ifsc code|ifsc|pan number|pan|"
+        "aadhaar number|aadhaar|aadhar number|aadhar|uan number|uan|date of birth|dob|gender|seat label|seat"
     )
     match = re.search(
         rf"\b(?:{label_pattern})\b\s*(?::|-|=)?\s*(?:is\s+)?(.+?)(?=\s*,\s*(?:his\s+|her\s+)?(?:{stop_labels})\b|\s+(?:his\s+|her\s+)?(?:{stop_labels})\s*(?:is|:|-|=)|[.!?]|$)",

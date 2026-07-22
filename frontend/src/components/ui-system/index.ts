@@ -37,6 +37,7 @@ export {
   ConversationalApprovalCard,
   OfferLetterPreviewCard,
   OnboardingProgressCard,
+  OnboardingProgressChecklistCard,
   StatusBannerCard,
   WorkflowStatusPill,
 } from "./BusinessResponseCards";
