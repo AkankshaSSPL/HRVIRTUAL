@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -19,6 +19,8 @@ from app.models.agents import AgentRun
 from app.models.audit import AuditLog
 from app.models.employee import Department, Designation, Employee, EmployeeAsset, Notification
 from app.services.onboarding_progress import compute_onboarding_progress
+from app.services.email_service import send_welcome_email
+from app.agents.onboarding_agent.llm import llm_available, llm_extract_onboarding, llm_compose_reply
 
 logger = logging.getLogger(__name__)
 
@@ -46,49 +48,247 @@ class OnboardingAgent(BaseAgent):
         return self.execute(command=payload.get("command", ""), user_id=context.user_id, workflow_id=context.workflow_id)
 
     def execute(self, *, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
-        finishing_employee_id = _latest_onboarding_finishing_employee_id(self.db, user_id)
-        if finishing_employee_id:
-            employee = get_employee_by_id(self.db, finishing_employee_id)
-            if employee:
-                return self._continue_finishing(employee=employee, command=command, user_id=user_id, workflow_id=workflow_id)
+        """Conversational, LLM-driven onboarding. Create-early: as soon as a name is
+        known the employee record is created and the 7-step bar appears; each turn the
+        assistant captures whatever the user said (LLM, regex fallback), updates the
+        record, recomputes progress, and asks for the next section naturally."""
+        employee_id = _latest_onboarding_finishing_employee_id(self.db, user_id)
+        employee = get_employee_by_id(self.db, employee_id) if employee_id else None
 
-        latest_draft = _latest_onboarding_draft(self.db, user_id)
-        extracted = extract_onboarding_entities(command)
-        base_draft = None if is_onboarding_intent(command) and not is_start_confirmation(command) else latest_draft
-        state_before_merge = dict(base_draft or {})
-        draft = merge_entities(base_draft, extracted)
-        field_sources = _merge_field_sources(state_before_merge, extracted)
-        missing_fields = missing_onboarding_fields(draft)
-        state_debug = _state_debug(
-            command=command,
-            extracted=extracted,
-            state_before_merge=state_before_merge,
-            state_after_merge=draft,
-            field_sources=field_sources,
-            missing_fields=missing_fields,
-            workflow_id=workflow_id,
+        fields, source = self._extract_fields(command, employee)
+        logger.info("Onboarding turn (source=%s) captured=%s", source, fields)
+
+        if employee is None:
+            if not fields.get("first_name") and not fields.get("last_name"):
+                return self._ask_for_name(command=command, workflow_id=workflow_id)
+            employee = self._create_early(fields=fields, user_id=user_id)
+            just_captured = fields
+        else:
+            just_captured = self._apply_fields(employee=employee, fields=fields, command=command, user_id=user_id)
+
+        self.db.refresh(employee)
+        return self._turn(employee=employee, command=command, workflow_id=workflow_id, just_captured=just_captured)
+
+    # ----- conversational helpers (LLM for language, code for truth) -----
+
+    def _extract_fields(self, command: str, employee: Employee | None) -> tuple[dict[str, Any], str]:
+        known = self._known_from_employee(employee) if employee else {}
+        if llm_available():
+            try:
+                return _normalize_canonical(llm_extract_onboarding(command, known)), "llm"
+            except Exception:
+                logger.exception("LLM onboarding extraction failed; using rule fallback")
+        return _normalize_canonical(extract_onboarding_entities(command)), "rules"
+
+    def _known_from_employee(self, employee: Employee) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in {
+                "first_name": employee.first_name,
+                "last_name": employee.last_name,
+                "personal_email": employee.personal_email,
+                "phone": employee.phone,
+                "gender": employee.gender,
+                "joining_date": employee.joining_date.isoformat() if employee.joining_date else None,
+                "department_id_set": bool(employee.department_id),
+                "designation_id_set": bool(employee.designation_id),
+                "manager_set": bool(employee.reporting_manager_id),
+                "salary_set": employee.current_salary is not None,
+            }.items()
+            if value not in (None, "", False)
+        }
+
+    def _create_early(self, *, fields: dict[str, Any], user_id: UUID | None) -> Employee:
+        name = " ".join(part for part in (fields.get("first_name"), fields.get("last_name")) if part).strip()
+        candidate = {
+            "name": name,
+            "email": fields.get("personal_email"),
+            "phone": fields.get("phone"),
+            "department": fields.get("department"),
+            "designation": fields.get("designation"),
+            "manager": fields.get("manager"),
+            "joining_date": fields.get("joining_date") or date.today().isoformat(),
+            "salary": fields.get("salary"),
+            "dob": fields.get("dob"),
+            "gender": fields.get("gender"),
+            "employment_type": fields.get("employment_type"),
+            "bank_account_number": fields.get("bank_account_number"),
+            "ifsc_code": fields.get("ifsc_code"),
+            "pan_number": fields.get("pan_number"),
+            "aadhaar_number": fields.get("aadhaar_number"),
+            "uan_number": fields.get("uan_number"),
+        }
+        result = _create_employee_from_onboarding(
+            self.db,
+            candidate=candidate,
+            assets=ASSET_CHECKLIST,
+            payload={"candidate_id": None, "command": "agent onboarding"},
+            performed_by=user_id,
         )
-        logger.info("Onboarding extraction: %s", state_debug)
+        self.db.commit()
+        return get_employee_by_id(self.db, UUID(result["employee"]["id"]))
 
-        if latest_draft and not missing_fields and is_start_confirmation(command):
-            parsed = _draft_to_parsed({**draft, "field_sources": field_sources}, command)
-            result = self._start_onboarding(parsed=parsed, command=command, user_id=user_id, workflow_id=workflow_id, conversational=True)
-            return _with_state_debug(result, state_debug)
+    def _apply_fields(self, *, employee: Employee, fields: dict[str, Any], command: str, user_id: UUID | None) -> dict[str, Any]:
+        # Supplement the LLM with a targeted regex seat parse (bare "A-3" replies).
+        if not fields.get("seat"):
+            regex_seat = extract_onboarding_entities(command).get("seat")
+            if regex_seat:
+                fields["seat"] = regex_seat
 
-        if missing_fields:
-            return _with_state_debug(_missing_field_response(draft=draft, field_sources=field_sources, missing_fields=missing_fields, command=command, workflow_id=workflow_id), state_debug)
+        updates: dict[str, Any] = {}
+        captured: dict[str, Any] = {}
+        for src, col in (
+            ("first_name", "first_name"),
+            ("last_name", "last_name"),
+            ("personal_email", "personal_email"),
+            ("phone", "phone"),
+            ("dob", "dob"),
+            ("gender", "gender"),
+            ("employment_type", "employment_type"),
+            ("joining_date", "joining_date"),
+            ("bank_account_number", "bank_account_number"),
+            ("ifsc_code", "ifsc_code"),
+            ("pan_number", "pan_number"),
+            ("aadhaar_number", "aadhaar_number"),
+            ("uan_number", "uan_number"),
+        ):
+            if fields.get(src) is not None:
+                updates[col] = fields[src]
+                captured[src] = fields[src]
+        if fields.get("salary") is not None:
+            updates["current_salary"] = fields["salary"]
+            captured["salary"] = fields["salary"]
+        if fields.get("department"):
+            dept = _find_or_create_department(self.db, fields["department"])
+            if dept:
+                updates["department_id"] = dept.id
+                captured["department"] = dept.name
+        if fields.get("designation"):
+            desig = _find_or_create_designation(self.db, fields["designation"])
+            if desig:
+                updates["designation_id"] = desig.id
+                captured["designation"] = desig.title
+        if fields.get("manager"):
+            mgr = _find_manager(self.db, fields["manager"])
+            if mgr:
+                updates["reporting_manager_id"] = mgr.id
+                captured["manager"] = employee_display_name(mgr)
+        if fields.get("seat"):
+            updates["seat_label"] = str(fields["seat"]).upper()
+            captured["seat"] = updates["seat_label"]
 
-        if not missing_fields and is_onboarding_intent(command) and draft.get("name"):
-            parsed = _draft_to_parsed({**draft, "field_sources": field_sources}, command)
-            result = self._start_onboarding(parsed=parsed, command=command, user_id=user_id, workflow_id=workflow_id, conversational=True)
-            return _with_state_debug(result, state_debug)
+        if updates:
+            update_employee_fields(self.db, employee.id, updates)
+            self.db.add(
+                AuditLog(
+                    entity_type="employee",
+                    entity_id=employee.id,
+                    action="employee.onboarding_updated",
+                    new_value=captured,
+                    performed_by=user_id,
+                )
+            )
+            self.db.flush()
+            self.db.refresh(employee)
 
-        if latest_draft or extracted:
-            return _with_state_debug(_summary_response(draft=draft, field_sources=field_sources, command=command, workflow_id=workflow_id), state_debug)
+        # Welcome-mail confirmation (button sends "yes"); mirror the manual endpoint.
+        progress = compute_onboarding_progress(self.db, employee)
+        if (
+            _first_pending_finishing_step(progress) == "welcome_mail"
+            and _is_affirmative(command)
+            and progress["welcome_kit_ready"]
+            and employee.welcome_kit_sent_at is None
+        ):
+            if send_welcome_email(employee):
+                employee.welcome_kit_sent_at = datetime.now(timezone.utc)
+                self.db.add(
+                    AuditLog(
+                        entity_type="employee",
+                        entity_id=employee.id,
+                        action="employee.welcome_kit_sent",
+                        new_value={"welcome_kit_sent_at": employee.welcome_kit_sent_at.isoformat()},
+                        performed_by=user_id,
+                    )
+                )
+                captured["welcome_mail"] = "sent"
 
-        parsed = parsed_from_command(command)
-        result = self._start_onboarding(parsed=parsed, command=command, user_id=user_id, workflow_id=workflow_id, conversational=False)
-        return _with_state_debug(result, state_debug)
+        self.db.commit()
+        self.db.refresh(employee)
+        return captured
+
+    def _turn(self, *, employee: Employee, command: str, workflow_id: str, just_captured: dict[str, Any]) -> dict[str, Any]:
+        progress = compute_onboarding_progress(self.db, employee)
+        section_label, ask_for, kind = _next_section(progress, employee)
+        completed = kind == "done"
+        name = employee_display_name(employee)
+        message = self._reply(
+            name=name,
+            percent=progress["percent"],
+            section_label=section_label,
+            ask_for=ask_for,
+            just_captured=just_captured,
+            completed=completed,
+        )
+        structured_response: dict[str, Any] = {
+            "type": "onboarding_finishing",
+            "title": "Onboarding complete" if completed else "Onboarding in progress",
+            "summary": message,
+            "employee_id": str(employee.id),
+            "candidate": employee_profile(employee),
+            "progress": progress,
+            "completed": completed,
+        }
+        if kind == "document":
+            structured_response["awaiting_upload"] = {"employee_id": str(employee.id), "document_type": "Identity Document"}
+        return {
+            "agent": self.name,
+            "agent_display_name": "Onboarding Agent",
+            "action": "onboarding_complete" if completed else "onboarding_collect",
+            "message": message,
+            "operation_summary": "Onboarding workflow",
+            "execution_status": "Completed" if completed else "In Progress",
+            "workflow_status": "Completed" if completed else "Collecting Details",
+            "execution_summary": f"{name} is {progress['percent']}% onboarded.",
+            "next_actions": "Open Employees to review the record." if completed else "Reply with the requested details.",
+            "approval_request_id": None,
+            "structured_response": structured_response,
+            "command": command,
+            "workflow_id": workflow_id,
+            "completed_at": datetime.now(timezone.utc).isoformat() if completed else None,
+        }
+
+    def _reply(self, *, name: str, percent: int, section_label: str, ask_for: list[str], just_captured: dict[str, Any], completed: bool) -> str:
+        if llm_available():
+            try:
+                return llm_compose_reply(
+                    name=name,
+                    percent=percent,
+                    section_label=section_label,
+                    ask_for=ask_for,
+                    just_captured=just_captured,
+                    completed=completed,
+                )
+            except Exception:
+                logger.exception("LLM reply composition failed; using template")
+        return _template_reply(name=name, percent=percent, section_label=section_label, ask_for=ask_for, completed=completed)
+
+    def _ask_for_name(self, *, command: str, workflow_id: str) -> dict[str, Any]:
+        message = "Sure — who are we onboarding? Tell me the new hire's name (and anything else you already have)."
+        return {
+            "agent": self.name,
+            "agent_display_name": "Onboarding Agent",
+            "action": "onboarding_collect",
+            "message": message,
+            "operation_summary": "Onboarding workflow",
+            "execution_status": "Collecting Details",
+            "workflow_status": "Collecting Details",
+            "execution_summary": "Waiting for the new hire's name to begin.",
+            "next_actions": "Reply with the employee's name.",
+            "approval_request_id": None,
+            "structured_response": {"type": "status_banner", "title": "Let's onboard someone", "summary": message},
+            "command": command,
+            "workflow_id": workflow_id,
+        }
 
     def _start_onboarding(self, *, parsed: dict[str, Any], command: str, user_id: UUID | None, workflow_id: str, conversational: bool) -> dict[str, Any]:
         candidate = create_candidate_profile(self.db, parsed)
@@ -172,18 +372,23 @@ class OnboardingAgent(BaseAgent):
                 self.db.refresh(employee)
         elif pending_step == "welcome_mail":
             if _is_affirmative(command) and progress["welcome_kit_ready"] and employee.welcome_kit_sent_at is None:
-                employee.welcome_kit_sent_at = datetime.now(timezone.utc)
-                self.db.add(
-                    AuditLog(
-                        entity_type="employee",
-                        entity_id=employee.id,
-                        action="employee.welcome_kit_sent",
-                        new_value={"welcome_kit_sent_at": employee.welcome_kit_sent_at.isoformat()},
-                        performed_by=user_id,
+                # Mirror the manual send-welcome-kit endpoint: actually send the
+                # email, and only stamp welcome_kit_sent_at if it succeeded (no
+                # false "sent"). On failure the step stays pending and re-prompts.
+                sent = send_welcome_email(employee)
+                if sent:
+                    employee.welcome_kit_sent_at = datetime.now(timezone.utc)
+                    self.db.add(
+                        AuditLog(
+                            entity_type="employee",
+                            entity_id=employee.id,
+                            action="employee.welcome_kit_sent",
+                            new_value={"welcome_kit_sent_at": employee.welcome_kit_sent_at.isoformat()},
+                            performed_by=user_id,
+                        )
                     )
-                )
-                self.db.commit()
-                self.db.refresh(employee)
+                    self.db.commit()
+                    self.db.refresh(employee)
         # documents: nothing to parse from free text. A synthetic continuation ping sent
         # right after a successful upload will already see documents_complete == True in
         # the fresh progress computed below, so it falls through to the next step on its own.
@@ -500,6 +705,82 @@ def _first_pending_finishing_step(progress: dict[str, Any]) -> str | None:
         if item and not item["complete"]:
             return step
     return None
+
+
+# Noise keys the LLM/regex may return that the onboarding record does not use.
+_CANONICAL_DROP = {"resume_uploaded", "salary_structure", "location", "experience", "shift", "address", "employee_code"}
+
+
+def _normalize_canonical(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize LLM (first_name/last_name/personal_email) and regex (name/email)
+    extractions into one canonical field dict."""
+    data = dict(raw or {})
+    if "name" in data:  # regex path yields a combined name
+        first, last = _split_name(data.pop("name"))
+        if first:
+            data.setdefault("first_name", first)
+        if last:
+            data.setdefault("last_name", last)
+    if "email" in data and "personal_email" not in data:
+        data["personal_email"] = data.pop("email")
+    for key in _CANONICAL_DROP:
+        data.pop(key, None)
+    return {key: value for key, value in data.items() if value not in (None, "", [])}
+
+
+def _next_section(progress: dict[str, Any], employee: Employee) -> tuple[str, list[str], str]:
+    """Return (section_label, fields_to_ask, kind) for the first incomplete section.
+    kind is one of: collect | document | seat | welcome | done."""
+    by_key = {item["key"]: item for item in progress["items"]}
+
+    if not by_key["personal_details"]["complete"]:
+        needed: list[str] = []
+        if not employee.first_name and not employee.last_name:
+            needed.append("full name")
+        elif not employee.last_name:
+            needed.append("last name")
+        if not employee.personal_email:
+            needed.append("personal email")
+        return "personal details", needed or ["personal email"], "collect"
+
+    if not by_key["employment_details"]["complete"]:
+        needed = []
+        if not employee.designation_id:
+            needed.append("designation")
+        if not employee.department_id:
+            needed.append("department")
+        if not employee.reporting_manager_id:
+            needed.append("reporting manager")
+        return "employment details", needed, "collect"
+
+    if not (by_key["payroll_readiness"]["complete"] and by_key["salary"]["complete"]):
+        needed = []
+        if employee.current_salary is None:
+            needed.append("salary")
+        if not employee.bank_account_number:
+            needed.append("bank account number")
+        if not employee.ifsc_code:
+            needed.append("IFSC code")
+        if not employee.pan_number:
+            needed.append("PAN number")
+        return "payroll details", needed, "collect"
+
+    if not by_key["documents"]["complete"]:
+        return "documents", ["an identity document (PAN, Aadhaar, etc.)"], "document"
+
+    if not by_key["seating"]["complete"]:
+        return "seating", ["a desk, e.g. A-3"], "seat"
+
+    if not by_key["welcome_mail"]["complete"]:
+        return "welcome email", ["confirmation to send the welcome email"], "welcome"
+
+    return "done", [], "done"
+
+
+def _template_reply(*, name: str, percent: int, section_label: str, ask_for: list[str], completed: bool) -> str:
+    if completed:
+        return f"All done — {name}'s onboarding is complete and they're now in the Employees list."
+    return f"({percent}%) Next, for {section_label}: please share {', '.join(ask_for)}."
 
 
 def _is_affirmative(command: str) -> bool:

@@ -23,20 +23,27 @@ type SeatingAllocationModalProps = {
   employeeId: string;
   currentSeat?: string | null;
   onClose: () => void;
+  /** Fired after a seat is successfully saved (before onClose). Lets callers
+   * continue a flow, e.g. the agent chat advancing the onboarding loop. */
+  onAssigned?: (seatLabel: string) => void;
 };
 
-export function SeatingAllocationModal({ open, employeeId, currentSeat, onClose }: SeatingAllocationModalProps) {
+export function SeatingAllocationModal({ open, employeeId, currentSeat, onClose, onAssigned }: SeatingAllocationModalProps) {
   const queryClient = useQueryClient();
   const [pendingSeat, setPendingSeat] = useState<string | null>(null);
 
   const assignMutation = useMutation({
     mutationFn: (seatLabel: string) => setEmployeeSeat(employeeId, seatLabel),
-    onSuccess: async () => {
+    onSuccess: async (_data, seatLabel) => {
       setPendingSeat(null);
       await queryClient.invalidateQueries({ queryKey: ["employee-onboarding-progress", employeeId] });
       await queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
-      onClose();
+      if (onAssigned) {
+        onAssigned(seatLabel);
+      } else {
+        onClose();
+      }
     },
   });
 

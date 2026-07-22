@@ -43,7 +43,9 @@ import { cn } from "@/lib/utils";
 import { getOnboardingStateDebug, getWorkflow, getWorkflows, submitAgentCommand, uploadOnboardingResume, type AgentCommandWorkflow, type RuntimeEvent } from "@/services/agents";
 import { getApproval, type ApprovalRequest } from "@/services/approvals";
 import { useAuthStore } from "@/stores/authStore";
-import { uploadEmployeeDocument } from "@/services/employees"; // <-- NEW
+import { uploadEmployeeDocument, type OnboardingProgress } from "@/services/employees"; // <-- NEW
+import { OnboardingStatusPanel } from "@/components/employees/OnboardingStatusPanel";
+import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 
 const suggestedActions = [
   "Show employees",
@@ -120,7 +122,84 @@ type StructuredResponse = {
     active?: boolean;
   }>;
   awaiting_upload?: { employee_id: string; document_type: string } | null; // <-- NEW
+  progress?: OnboardingProgress; // <-- onboarding_finishing: the 7-step progress
+  employee_id?: string; // <-- onboarding_finishing: the created employee
 };
+
+const FINISHING_STEP_ORDER = ["documents", "seating", "welcome_mail"];
+
+function firstPendingFinishingStep(progress: OnboardingProgress): string | null {
+  const byKey = new Map(progress.items.map((item) => [item.key, item]));
+  for (const key of FINISHING_STEP_ORDER) {
+    const item = byKey.get(key);
+    if (item && !item.complete) return key;
+  }
+  return null;
+}
+
+/**
+ * Renders the agent's `onboarding_finishing` turn: the identical 7-step status
+ * panel used on the manual profile, plus a contextual action for the current
+ * pending step (attach document / open seat map / send welcome mail / done).
+ */
+function OnboardingFinishingCard({
+  structuredResponse,
+  onSend,
+  onOpenSeat,
+}: {
+  structuredResponse: StructuredResponse;
+  onSend: (value: string) => void;
+  onOpenSeat: (employeeId: string, currentSeat?: string | null) => void;
+}) {
+  const progress = structuredResponse.progress;
+  const employeeId = structuredResponse.employee_id;
+  const completed = Boolean((structuredResponse as { completed?: boolean }).completed);
+  const awaitingUpload = structuredResponse.awaiting_upload;
+  const currentSeat = (structuredResponse.candidate as { seat_label?: string | null } | undefined)?.seat_label ?? null;
+
+  if (!progress) {
+    return <StatusBannerCard title={structuredResponse.title ?? "Onboarding"} summary={structuredResponse.summary ?? ""} />;
+  }
+
+  const pendingStep = firstPendingFinishingStep(progress);
+
+  return (
+    <div className="space-y-3">
+      {structuredResponse.summary ? <p className="text-sm text-muted-foreground">{structuredResponse.summary}</p> : null}
+      <OnboardingStatusPanel
+        progress={progress}
+        showWelcomeButton={false}
+        onOpenSeatAssignment={employeeId ? () => onOpenSeat(employeeId, currentSeat) : undefined}
+        onSendWelcomeKit={() => onSend("yes")}
+      />
+      {completed ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
+          <span className="font-medium text-emerald-700">Onboarding complete — now in Employees.</span>
+          <Link to="/employees">
+            <Button size="sm" variant="outline">Open Employees</Button>
+          </Link>
+        </div>
+      ) : awaitingUpload || pendingStep === "documents" ? (
+        <div className="rounded-lg border p-3 text-sm">
+          Attach the <span className="font-medium">{awaitingUpload?.document_type ?? "identity document"}</span> using the{" "}
+          <span className="font-medium">Attach</span> button below to complete this step.
+        </div>
+      ) : pendingStep === "seating" ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+          <span>Assign a desk to finish the seating step.</span>
+          {employeeId ? (
+            <Button size="sm" onClick={() => onOpenSeat(employeeId, currentSeat)}>Open seat map</Button>
+          ) : null}
+        </div>
+      ) : pendingStep === "welcome_mail" ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+          <span>Send the welcome mail to finish onboarding.</span>
+          <Button size="sm" onClick={() => onSend("yes")}>Send Welcome Mail</Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function formatTime(value: string | null) {
   if (!value) return "";
@@ -283,12 +362,14 @@ function BusinessResponse({
   message,
   onSend,
   onDraftCommand,
+  onOpenSeat,
   approval,
 }: {
   workflow: AgentCommandWorkflow;
   message: AgentCommandWorkflow["messages"][number];
   onSend: (value: string) => void;
   onDraftCommand: (value: string) => void;
+  onOpenSeat: (employeeId: string, currentSeat?: string | null) => void;
   approval?: ApprovalRequest | null;
 }) {
   const command = commandFromWorkflow(workflow);
@@ -327,6 +408,9 @@ function BusinessResponse({
         onStartOnboarding={structuredResponse.actions?.includes("Start Onboarding") ? () => onSend("Start onboarding") : undefined}
       />
     );
+  }
+  if (structuredResponse?.type === "onboarding_finishing") {
+    return <OnboardingFinishingCard structuredResponse={structuredResponse} onSend={onSend} onOpenSeat={onOpenSeat} />;
   }
   if (structuredResponse?.type === "onboarding_progress") return <OnboardingDoneCard workflow={workflow} structuredResponse={structuredResponse} />;
   if (structuredResponse?.type === "onboarding_progress_check") {
@@ -793,6 +877,8 @@ export function AgentCommandPage() {
 
   // NEW: pending upload for document step
   const [pendingUpload, setPendingUpload] = useState<{ employeeId: string; documentType: string } | null>(null);
+  // NEW: seat-map modal opened from the onboarding_finishing card
+  const [seatingFor, setSeatingFor] = useState<{ employeeId: string; currentSeat?: string | null } | null>(null);
 
   const workflowsQuery = useQuery({ queryKey: ["agent-command-workflows"], queryFn: getWorkflows, refetchInterval: 10000 });
   const workflows = useMemo(() => (workflowsQuery.data ?? []).slice(0, 30), [workflowsQuery.data]);
@@ -821,7 +907,11 @@ export function AgentCommandPage() {
     if (!latestAgentMessage) return;
     const structured = latestAgentMessage.metadata?.structured_response as StructuredResponse | undefined;
     if (structured?.awaiting_upload && !pendingUpload) {
-      setPendingUpload(structured.awaiting_upload);
+      // Map the backend snake_case shape into the camelCase state used by handleAttach.
+      setPendingUpload({
+        employeeId: structured.awaiting_upload.employee_id,
+        documentType: structured.awaiting_upload.document_type,
+      });
     }
     // If no awaiting_upload, we could clear, but we want to keep it until upload or user sends a non-upload command
   }, [activeWorkflow, pendingUpload]);
@@ -1033,7 +1123,7 @@ export function AgentCommandPage() {
                   agentName={messageAgent}
                   meta={<StatusBadge status={friendlyStatus(workflow.status)} tone={statusTone(workflow.status)} />}
                 >
-                  <BusinessResponse workflow={workflow} message={message} onSend={(value) => commandMutation.mutate(value)} onDraftCommand={setCommandDraft} approval={messageApproval} />
+                  <BusinessResponse workflow={workflow} message={message} onSend={(value) => commandMutation.mutate(value)} onDraftCommand={setCommandDraft} onOpenSeat={(employeeId, currentSeat) => setSeatingFor({ employeeId, currentSeat })} approval={messageApproval} />
                 </AgentMessageBubble>
               );
             })}
@@ -1097,6 +1187,19 @@ export function AgentCommandPage() {
           <div className="fixed bottom-6 right-6 z-50 animate-in fade-in-50 slide-in-from-bottom-2">
             <ToastNotification title={toast.title} description={toast.description} type={toast.type} />
           </div>
+        ) : null}
+
+        {seatingFor ? (
+          <SeatingAllocationModal
+            open
+            employeeId={seatingFor.employeeId}
+            currentSeat={seatingFor.currentSeat}
+            onClose={() => setSeatingFor(null)}
+            onAssigned={() => {
+              setSeatingFor(null);
+              commandMutation.mutate("continue onboarding");
+            }}
+          />
         ) : null}
 
         {isDebugMode ? <DrawerPanel open={detailsOpen} title="Admin Workflow Details" size="2xl" onClose={() => setDetailsOpen(false)}>

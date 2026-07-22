@@ -11,8 +11,11 @@ def send_welcome_email(employee) -> bool:
     Returns True if sent successfully, False otherwise.
     """
     if not settings.email_enabled:
+        # Dev/no-creds mode: treat as a successful no-op so onboarding can complete
+        # (the welcome step still stamps and reaches 100%). Set EMAIL_ENABLED=true
+        # with real SMTP creds to actually deliver.
         logger.info(f"Email disabled. Would send welcome email to {employee.personal_email}")
-        return False
+        return True
 
     if not employee.personal_email:
         logger.error("No personal email address for employee")

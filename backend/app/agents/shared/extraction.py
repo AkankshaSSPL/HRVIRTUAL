@@ -241,9 +241,15 @@ def _shift(text: str) -> str | None:
 
 
 def _bank_account_number(text: str) -> str | None:
-    labeled = _labeled_value(text, ("bank account number", "bank account", "account number", "a/c number", "a/c"))
+    labeled = _labeled_value(text, ("bank account number", "bank account", "account number", "a/c number", "a/c", "bank"))
     if not labeled:
         return None
+    # Prefer a contiguous digit run (bank accounts are numeric); fall back to
+    # the alnum-stripped label value for edge phrasings.
+    run = re.search(r"\d[\d\s-]{4,}\d", labeled)
+    if run:
+        digits = re.sub(r"[^0-9]", "", run.group(0))
+        return digits or None
     digits = re.sub(r"[^0-9A-Za-z]", "", labeled)
     return digits or None
 
@@ -316,7 +322,7 @@ def _labeled_value(text: str, labels: tuple[str, ...]) -> str | None:
     stop_labels = (
         "name|designation|desig|role|title|department|dept|manager|reporting manager|reports to|under|"
         "salary|salary structure|structure|ctc|pay|employee type|employment type|type|location|work location|based in|joining|experience|email|phone|shift|work shift|"
-        "bank account number|bank account|account number|a/c number|a/c|ifsc code|ifsc|pan number|pan|"
+        "bank account number|bank account|account number|a/c number|a/c|bank|ifsc code|ifsc|pan number|pan|"
         "aadhaar number|aadhaar|aadhar number|aadhar|uan number|uan|date of birth|dob|gender|seat label|seat"
     )
     match = re.search(

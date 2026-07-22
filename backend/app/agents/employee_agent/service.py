@@ -39,6 +39,22 @@ _ONBOARDING_PROGRESS_STOPWORDS = re.compile(
     re.IGNORECASE,
 )
 
+# Filler words that can leak into a captured employee name (e.g. "profile of
+# employee Gouri Chillure" -> "employee Gouri Chillure"). Stripped from both
+# ends so the residual is just the person's name.
+_NAME_LEADING_FILLER = {"employee", "the", "staff", "member", "named", "for", "of", "profile", "details", "record", "about"}
+_NAME_TRAILING_FILLER = {"profile", "details", "record", "onboarding", "progress", "status", "info", "information"}
+
+
+def _clean_employee_name(name: str) -> str:
+    """Strip leading/trailing filler words from a captured employee name."""
+    tokens = (name or "").strip().split()
+    while tokens and tokens[0].lower().strip(".,'’") in _NAME_LEADING_FILLER:
+        tokens.pop(0)
+    while tokens and tokens[-1].lower().strip(".,'’") in _NAME_TRAILING_FILLER:
+        tokens.pop()
+    return " ".join(tokens).strip()
+
 
 class EmployeeAgent(BaseAgent):
     name = "employee_agent"
@@ -487,7 +503,7 @@ class EmployeeAgent(BaseAgent):
         for pat in patterns:
             match = re.match(pat, command.strip(), re.IGNORECASE)
             if match:
-                name = match.group(1).strip()
+                name = _clean_employee_name(match.group(1))
                 # Skip if it's "all", "list", etc.
                 if name and name.lower() not in {"employees", "employee", "all", "list", "directory"}:
                     logger.info(f"Direct pattern matched: {name!r}")
@@ -500,21 +516,21 @@ class EmployeeAgent(BaseAgent):
         # 3. Special case: "show <name>" without "employee" – if it has exactly two words, treat as name
         match = re.match(r"^(?:show|find|get|display|view)\s+([A-Za-z]+\s+[A-Za-z]+)$", command.strip(), re.IGNORECASE)
         if match:
-            name = match.group(1).strip()
+            name = _clean_employee_name(match.group(1))
             if name and name.lower() not in {"employees", "employee", "all", "list"}:
                 return name
 
         # 4. Handle "update <name> salary to <amount>"
         match = re.search(r"(?:salary|pay|ctc)\s+(?:for|to|of)\s+([a-z][a-z\s.]+?)(?:\s+from|\s+effective|$)", command, re.IGNORECASE)
         if match:
-            name = match.group(1).strip()
+            name = _clean_employee_name(match.group(1))
             if name and name.lower() not in {"employees", "employee", "all"}:
                 return name
 
         # 5. Handle "profile of <name>"
         match = re.search(r"\bprofile\s+(?:of|for)\s+([a-z][a-z\s.]+?)(?:['’]s)?(?:\s+salary|\s+department|\s+manager|\s+to|\s+from|$)", command, re.IGNORECASE)
         if match:
-            name = match.group(1).strip()
+            name = _clean_employee_name(match.group(1))
             if name and name.lower() not in {"employees", "employee"}:
                 return name
 
