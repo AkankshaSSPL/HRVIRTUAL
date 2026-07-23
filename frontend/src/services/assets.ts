@@ -1,29 +1,3 @@
-<<<<<<< HEAD
-import { apiGet, apiPatch } from "@/services/api";
-
-export type AssetRecord = {
-  id: string;
-  employee_id: string;
-  employee_name?: string | null;
-  asset_type: string;
-  asset_code: string;
-  assigned_at?: string | null;
-  returned_at?: string | null;
-  asset_status: string;
-};
-
-export function getAssets(employeeId?: string, status?: string) {
-  const params = new URLSearchParams();
-  if (employeeId) params.set("employee_id", employeeId);
-  if (status) params.set("status", status);
-  const query = params.toString();
-  return apiGet<AssetRecord[]>(`/assets${query ? `?${query}` : ""}`);
-}
-
-export function updateAssetStatus(assetId: string, status: string) {
-  return apiPatch<AssetRecord>(`/assets/${assetId}/status`, { status });
-}
-=======
 import { apiGet, apiPatch, apiPost } from "@/services/api";
 
 export type AssetRecord = {
@@ -64,4 +38,3 @@ export function createAsset(payload: {
 export function updateAssetStatus(assetId: string, status: string): Promise<AssetRecord> {
   return apiPatch<AssetRecord>(`/assets/${assetId}`, { status });
 }
->>>>>>> 9192e02e95954a8bda391e9df0e9f1568cdbc159

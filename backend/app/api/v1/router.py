@@ -27,10 +27,6 @@ api_router.include_router(leave.router, prefix="/leave", tags=["leave"])
 api_router.include_router(resume.router, prefix="/resume", tags=["resume"])
 api_router.include_router(payroll_endpoints.router, prefix="/payroll", tags=["payroll"])
 api_router.include_router(salary_assignments.router, prefix="/salary-assignments", tags=["salary-assignments"])
-<<<<<<< HEAD
-api_router.include_router(health.router, prefix="/health", tags=["health"])
-api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
-=======
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
+api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
->>>>>>> 9192e02e95954a8bda391e9df0e9f1568cdbc159
