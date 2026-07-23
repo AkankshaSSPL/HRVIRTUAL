@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState } from "react"; // useMemo still used for metricCards
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Ban, Check, Flag, Home, Minus, Search, X } from "lucide-react";
 
@@ -46,7 +46,6 @@ export function AttendancePage() {
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
-  const [viewMode, setViewMode] = useState<"matrix" | "calendar">("matrix");
   const [selectedCell, setSelectedCell] = useState<AttendanceCell | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<AttendanceMatrixRow | null>(null);
   const [remarks, setRemarks] = useState("");
@@ -82,16 +81,6 @@ export function AttendancePage() {
     [dashboardQuery.data],
   );
 
-  const calendarDays = useMemo(() => {
-    return (matrix?.days ?? []).map((day) => ({
-      ...day,
-      cells: (matrix?.rows ?? []).flatMap((row) =>
-        row.cells
-          .filter((cell) => cell.date === day.date)
-          .map((cell) => ({ ...cell, employee_name: row.employee_name })),
-      ),
-    }));
-  }, [matrix]);
 
   function mark(statusValue: string) {
     if (!selectedCell) return;
@@ -153,21 +142,6 @@ export function AttendancePage() {
             ))}
           </div>
 
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="inline-flex rounded-md border bg-muted/40 p-1">
-              <Button size="sm" variant={viewMode === "matrix" ? "default" : "ghost"} onClick={() => setViewMode("matrix")}>
-                Matrix
-              </Button>
-              <Button size="sm" variant={viewMode === "calendar" ? "default" : "ghost"} onClick={() => setViewMode("calendar")}>
-                Calendar
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {viewMode === "calendar" ? "Calendar shows the current paged employees." : "Matrix shows employees by day."}
-            </p>
-          </div>
-
-          {viewMode === "matrix" ? (
           <div className="overflow-auto rounded-lg border">
             <table className="min-w-max border-collapse text-sm">
               <thead className="sticky top-0 z-10 bg-muted">
@@ -213,39 +187,6 @@ export function AttendancePage() {
             </table>
             {!matrixQuery.isLoading && !matrixQuery.isError && !matrix?.rows.length ? <p className="p-6 text-center text-sm text-muted-foreground">No employees match these attendance filters.</p> : null}
           </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-              {calendarDays.map((day) => {
-                const leaveCells = day.cells.filter((cell) => ["PAID_LEAVE", "UNPAID_LEAVE", "WORK_FROM_HOME"].includes(cell.status));
-                const displayCells = leaveCells.length ? leaveCells : day.cells.slice(0, 3);
-                return (
-                  <div key={day.date} className="min-h-36 rounded-lg border bg-card p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold">{day.day}</p>
-                        <p className="text-xs text-muted-foreground">{day.weekday}</p>
-                      </div>
-                      <StatusBadge status={`${leaveCells.length || day.cells.length} records`} tone={leaveCells.length ? "warning" : "neutral"} />
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {displayCells.map((cell) => (
-                        <button
-                          key={`${cell.employee_id}-${cell.date}`}
-                          type="button"
-                          onClick={() => { setSelectedCell(cell); setRemarks(cell.remarks ?? ""); }}
-                          className={cn("w-full rounded-md border px-2 py-1 text-left text-xs", statusStyles[cell.status] ?? statusStyles.MISSING)}
-                        >
-                          <span className="block font-medium">{cell.employee_name}</span>
-                          <span>{cell.label}</span>
-                        </button>
-                      ))}
-                      {!displayCells.length ? <p className="text-xs text-muted-foreground">No employees on this page.</p> : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
 
           <div className="mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">

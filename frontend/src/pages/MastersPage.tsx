@@ -31,6 +31,7 @@ const categoryGroups: Record<string, string> = {
   employment_status: "organization",
   gender: "organization",
   candidate_status: "organization",
+  asset_type: "organization",
   attendance_status: "attendance_leave",
   leave_category: "attendance_leave",
   leave_request_status: "attendance_leave",
