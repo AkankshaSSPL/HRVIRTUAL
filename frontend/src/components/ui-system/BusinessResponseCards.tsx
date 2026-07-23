@@ -13,6 +13,7 @@ import { createSalaryAssignment, getEmployeePayrollImpact, getEmployeeSalary, ge
 import { getEmployeeAttendanceSummary } from "@/services/attendance";
 import { getEmployeeLeaveBalances, getEmployeeLeaveHistory } from "@/services/leave";
 import { getDocuments } from "@/services/documents";
+import { getAssets, type AssetRecord } from "@/services/assets";
 import { useAuthStore } from "@/stores/authStore";
 
 import { useRef } from "react";
@@ -702,7 +703,12 @@ export function EmployeeProfileDrawer({
     enabled: Boolean(open && employee?.id && tab === "Documents"),
   });
   const employeeDocuments = (documentsQuery.data ?? []).filter((document) => document.employee_id === employee?.id);
-  const tabs = ["Personal", "Employment", "Documents", ...(canViewPayroll ? ["Salary"] : []), "Leave", "Attendance", ...(canViewPayroll ? ["Payroll Impact"] : [])];
+  const assetsQuery = useQuery({
+    queryKey: ["employee-assets", employee?.id],
+    queryFn: () => getAssets(employee!.id!),
+    enabled: Boolean(open && employee?.id && tab === "Assets"),
+  });
+  const tabs = ["Personal", "Employment", "Documents", "Assets", ...(canViewPayroll ? ["Salary"] : []), "Leave", "Attendance", ...(canViewPayroll ? ["Payroll Impact"] : [])];
   const profileEmployee = employee ? {
     ...employee,
     salary: canViewPayroll ? salaryQuery.data?.current?.gross_salary_display ?? employee.salary : undefined,
@@ -979,6 +985,47 @@ export function EmployeeProfileDrawer({
                     </div>
                   ) : null}
                 </>
+              ) : null}
+            </div>
+          ) : null}
+          {tab === "Assets" ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-muted-foreground">
+                  {assetsQuery.isLoading ? "Loading…" : `Assets (${assetsQuery.data?.length ?? 0})`}
+                </p>
+              </div>
+              {assetsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading assets...</p> : null}
+              {!assetsQuery.isLoading && !assetsQuery.data?.length ? (
+                <p className="rounded-lg border p-4 text-sm text-muted-foreground">No assets assigned.</p>
+              ) : null}
+              {(assetsQuery.data ?? []).length ? (
+                <div className="divide-y rounded-lg border">
+                  {(assetsQuery.data ?? []).map((asset: AssetRecord) => (
+                    <div key={asset.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md border", agentThemeFor("asset_agent").icon)}>
+                          <Laptop className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {asset.asset_type}{asset.asset_name ? ` — ${asset.asset_name}` : ""}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{asset.asset_code}</p>
+                          {asset.validity_date ? (
+                            <p className={cn("text-xs", asset.is_expired ? "text-rose-600 font-medium" : "text-muted-foreground")}>
+                              {asset.is_expired ? "⚠ Expired " : "Valid until "}{asset.validity_date}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={asset.asset_status.replace(/_/g, " ")}
+                        tone={asset.asset_status === "ASSIGNED" ? "success" : asset.asset_status === "RETURNED" ? "neutral" : asset.asset_status === "LOST" ? "danger" : "warning"}
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : null}
             </div>
           ) : null}

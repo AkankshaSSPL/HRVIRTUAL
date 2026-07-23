@@ -9,6 +9,10 @@ import { OnboardingStatusPanel } from "@/components/employees/OnboardingStatusPa
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 import { AppLayout, ConfirmDialog, EmployeeProfileDrawer, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from "@/components/ui-system";
 import { deactivateEmployee, getEmployee, getEmployeeOnboardingProgress, sendWelcomeKit } from "@/services/employees";
+import { getAssets, type AssetRecord } from "@/services/assets";
+import { Laptop, Package } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui-system";
 
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -47,21 +51,61 @@ export function EmployeeProfilePage() {
     },
   });
 
+  const assetsQuery = useQuery({
+    queryKey: ["employee-assets", id],
+    queryFn: () => getAssets(id!),
+    enabled: Boolean(id),
+  });
+
   const employee = employeeQuery.data;
   const progress = progressQuery.data;
 
-  const progressHeader = progress ? (
-    <OnboardingStatusPanel
-      progress={progress}
-      activeTab={activeTab}
-      onSelectStep={setActiveTab}
-      onOpenSeatAssignment={() => setSeatModalOpen(true)}
-      onSendWelcomeKit={() => id && welcomeKitMutation.mutate(id)}
-      sendingWelcomeKit={welcomeKitMutation.isPending}
-    />
-  ) : progressQuery.isLoading ? (
-    <LoadingSkeleton rows={2} />
-  ) : null;
+  const assets = assetsQuery.data ?? [];
+
+  const progressHeader = (
+    <div className="space-y-3">
+      {progressQuery.isLoading ? <LoadingSkeleton rows={2} /> : null}
+      {progress ? (
+        <OnboardingStatusPanel
+          progress={progress}
+          activeTab={activeTab}
+          onSelectStep={setActiveTab}
+          onOpenSeatAssignment={() => setSeatModalOpen(true)}
+          onSendWelcomeKit={() => id && welcomeKitMutation.mutate(id)}
+          sendingWelcomeKit={welcomeKitMutation.isPending}
+        />
+      ) : null}
+      {/* Asset Allocation — matches Image #15 style */}
+      <div className="rounded-lg border bg-card p-4">
+        <p className="text-sm font-semibold mb-3">Assets ({assets.length})</p>
+        {assetsQuery.isLoading ? <p className="text-xs text-muted-foreground">Loading assets…</p> : null}
+        {!assetsQuery.isLoading && !assets.length ? (
+          <p className="text-xs text-muted-foreground">No assets assigned yet.</p>
+        ) : null}
+        <div className="space-y-2">
+          {assets.map((asset: AssetRecord) => (
+            <div key={asset.id} className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-muted">
+                  <Laptop className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {asset.asset_type}{asset.asset_name ? ` — ${asset.asset_name}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{asset.asset_code}</p>
+                </div>
+              </div>
+              <StatusBadge
+                status={asset.asset_status.replace(/_/g, " ")}
+                tone={asset.asset_status === "ASSIGNED" ? "success" : asset.asset_status === "RETURNED" ? "neutral" : "danger"}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <AppLayout>
