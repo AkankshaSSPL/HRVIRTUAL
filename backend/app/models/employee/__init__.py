@@ -13,6 +13,8 @@ from app.models.employee.models import (
     LeaveType,
     Notification,
     ResumeUpload,
+    Seat,
+    SeatStatus,
 )
 
 __all__ = [
@@ -30,4 +32,6 @@ __all__ = [
     "LeaveType",
     "Notification",
     "ResumeUpload",
+    "Seat",
+    "SeatStatus",
 ]

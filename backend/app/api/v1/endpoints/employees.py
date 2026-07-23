@@ -27,6 +27,7 @@ from app.models.auth import User
 from app.models.employee import Department, Designation, Employee
 from app.services.onboarding_progress import compute_onboarding_progress
 from app.services.email_service import send_welcome_email  # <-- NEW import
+from app.services.seat_service import assign_seat
 
 router = APIRouter()
 
@@ -205,14 +206,14 @@ def assign_employee_seat(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        employee, old_value, new_value = update_employee_fields(db, employee_id, {"seat_label": payload.seat_label})
+        seat, employee, old_seat_label = assign_seat(db, payload.seat_label, employee_id)
         db.add(
             AuditLog(
                 entity_type="employee",
                 entity_id=employee.id,
                 action="employee.seat_assigned",
-                old_value={"seat_label": old_value.get("seat_label")},
-                new_value={"seat_label": new_value.get("seat_label")},
+                old_value={"seat_label": old_seat_label},
+                new_value={"seat_label": seat.label},
                 performed_by=current_user.id,
             )
         )
@@ -221,6 +222,9 @@ def assign_employee_seat(
     except LookupError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("", dependencies=[Depends(require_permissions("employees:manage"))])

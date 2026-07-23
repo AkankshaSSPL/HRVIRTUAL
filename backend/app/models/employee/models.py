@@ -52,6 +52,28 @@ class AssetStatus(StrEnum):
     LOST = "LOST"
 
 
+class SeatStatus(StrEnum):
+    AVAILABLE = "AVAILABLE"
+    OCCUPIED = "OCCUPIED"
+    RESERVED = "RESERVED"
+    MAINTENANCE = "MAINTENANCE"
+    BLOCKED = "BLOCKED"
+
+
+class Seat(BaseModel):
+    __tablename__ = "seats"
+
+    label: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    zone: Mapped[str | None] = mapped_column(String(40))
+    row: Mapped[str | None] = mapped_column(String(10))
+    col: Mapped[int | None] = mapped_column(Integer)
+    seat_type: Mapped[str] = mapped_column(String(40), nullable=False, server_default="WORKSTATION")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, server_default="AVAILABLE")
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="SET NULL"))
+
+    employee: Mapped["Employee | None"] = relationship(foreign_keys=[employee_id])
+
+
 class AttendanceStatus(StrEnum):
     PRESENT = "PRESENT"
     ABSENT = "ABSENT"

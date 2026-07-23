@@ -10,6 +10,7 @@ from app.agents.resume_parser_agent import api as resume
 from app.agents.salary_assignment_agent import api as salary_assignments
 from app.api.v1.endpoints import auth, documents, employees, health, lookups, masters
 from app.api.v1.endpoints import payroll as payroll_endpoints
+from app.api.v1.endpoints import seats
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -27,3 +28,4 @@ api_router.include_router(resume.router, prefix="/resume", tags=["resume"])
 api_router.include_router(payroll_endpoints.router, prefix="/payroll", tags=["payroll"])
 api_router.include_router(salary_assignments.router, prefix="/salary-assignments", tags=["salary-assignments"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
+api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
