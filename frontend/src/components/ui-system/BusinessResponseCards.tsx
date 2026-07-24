@@ -745,9 +745,16 @@ export function EmployeeProfileDrawer({
             </Button>
           </div>
           {extraHeader}
-          <div className="flex flex-wrap gap-2 border-b pb-2">
+          <div className="flex gap-1 border-b pb-0 overflow-x-auto scrollbar-none -mb-px">
             {tabs.map((item) => (
-              <Button key={item} type="button" size="sm" variant={tab === item ? "default" : "ghost"} onClick={() => setTab(item)}>
+              <Button
+                key={item}
+                type="button"
+                size="sm"
+                variant={tab === item ? "default" : "ghost"}
+                className="shrink-0 rounded-b-none"
+                onClick={() => setTab(item)}
+              >
                 {item}
               </Button>
             ))}

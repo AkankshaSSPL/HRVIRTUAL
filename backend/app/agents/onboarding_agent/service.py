@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -29,6 +30,19 @@ OPTIONAL_ONBOARDING_FIELDS = {"designation", "department"}
 FINISHING_STEP_ORDER = ["documents", "seating", "welcome_mail"]
 FINISHING_AFFIRMATIVE_REPLIES = {"yes", "y", "send", "confirm", "proceed", "send it", "go ahead", "yes send"}
 
+_NEW_ONBOARDING_COMMAND_PATTERN = re.compile(
+    r"\b(?:onboard|hire|start onboarding for)\s+[A-Za-z]",
+    re.IGNORECASE,
+)
+
+
+def _is_new_onboarding_command(command: str) -> bool:
+    """True when the command explicitly starts onboarding a (new) person by name,
+    e.g. 'onboard Nikita Bhilare' or 'hire Priya as developer...'. Used so a fresh
+    onboarding command always creates a new employee record instead of being
+    hijacked by an older, unfinished onboarding sitting in the finishing loop."""
+    return bool(_NEW_ONBOARDING_COMMAND_PATTERN.search(command or ""))
+
 
 class OnboardingAgent(BaseAgent):
     name = "onboarding_agent"
@@ -51,9 +65,19 @@ class OnboardingAgent(BaseAgent):
         """Conversational, LLM-driven onboarding. Create-early: as soon as a name is
         known the employee record is created and the 7-step bar appears; each turn the
         assistant captures whatever the user said (LLM, regex fallback), updates the
-        record, recomputes progress, and asks for the next section naturally."""
-        employee_id = _latest_onboarding_finishing_employee_id(self.db, user_id)
-        employee = get_employee_by_id(self.db, employee_id) if employee_id else None
+        record, recomputes progress, and asks for the next section naturally.
+
+        A command that explicitly starts a new onboarding ("onboard <name>",
+        "hire <name>", "start onboarding for <name>") always begins a fresh
+        employee record, even if the user has an older onboarding still sitting
+        in the finishing loop (documents/seating/welcome mail pending). Only a
+        bare continuation reply (a seat code, "yes", a missing field) resumes
+        that older, unfinished onboarding.
+        """
+        employee = None
+        if not _is_new_onboarding_command(command):
+            employee_id = _latest_onboarding_finishing_employee_id(self.db, user_id)
+            employee = get_employee_by_id(self.db, employee_id) if employee_id else None
 
         fields, source = self._extract_fields(command, employee)
         logger.info("Onboarding turn (source=%s) captured=%s", source, fields)

@@ -197,10 +197,15 @@ def find_one_employee(db: Session, query: str) -> Employee | None:
     original = query
     query = query.strip()
 
-    # Regex patterns to remove common prefixes and capture the actual name/query
+    # Regex patterns to remove common prefixes and capture the actual name/query.
+    # Tried most-specific-first so longer phrasing (e.g. "status of onboarding of")
+    # is fully consumed before the shorter "status of" pattern would otherwise stop
+    # partway through and leave a dangling "onboarding of X".
     patterns = [
         r"^(?:show|find|get|update|employee)\s+(.+)$",
-        r"^(?:profile for|details for|info for)\s+(.+)$",
+        r"^(?:status\s+of\s+onboarding\s+of|status\s+for\s+onboarding\s+of|onboarding\s+status\s+of)\s+(.+)$",
+        r"^(?:status\s+of|status\s+for|profile\s+of|profile\s+for|profile for|details for|info for)\s+(.+)$",
+        r"^(?:of)\s+(.+)$",  # defensive: strip a dangling leading "of" left by upstream trimming
         r"^(.+)$",  # fallback
     ]
     for pat in patterns:

@@ -36,8 +36,8 @@ def _asset_payload(asset: EmployeeAsset) -> dict:
     if employee:
         name = " ".join(p for p in (employee.first_name, employee.last_name) if p).strip() or (employee.employee_code or "")
     today = date.today()
-    validity_date = getattr(asset, "validity_date", None)
-    asset_name = getattr(asset, "asset_name", None) or (asset.metadata_json or {}).get("asset_name")
+    validity_date = asset.validity_date
+    asset_name = asset.asset_name or (asset.metadata_json or {}).get("asset_name")
     is_expired = bool(validity_date and validity_date < today)
     return {
         "id": str(asset.id),
@@ -106,10 +106,12 @@ def create_asset(
     asset = EmployeeAsset(
         employee_id=employee.id,
         asset_type=payload.asset_type,
+        asset_name=payload.asset_name,
         asset_code=asset_code,
         asset_status="ASSIGNED",
         assigned_at=datetime.now(timezone.utc),
-        metadata_json={"source": "hr_manual", "asset_name": payload.asset_name},
+        validity_date=payload.validity_date,
+        metadata_json={"source": "hr_manual"},
     )
     db.add(asset)
     db.flush()

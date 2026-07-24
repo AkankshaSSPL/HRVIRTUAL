@@ -1169,6 +1169,21 @@ export function AgentCommandPage() {
           </div>
 
           <div className="sticky bottom-0 border-t bg-background/95 py-4 backdrop-blur">
+            {uploadingResume || pendingUpload ? (
+              <div className="px-4 pb-2">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: uploadingResume ? `${uploadProgress ?? 30}%` : "100%" }}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {uploadingResume
+                    ? `Uploading… ${uploadProgress ?? 0}%`
+                    : `Waiting for ${pendingUpload?.documentType ?? "document"} upload — use Attach below`}
+                </p>
+              </div>
+            ) : null}
             <CommandInput
               placeholder={pendingUpload ? "Upload the requested document (image or PDF)" : "Ask for an HR operation. Enter sends, Shift+Enter adds a line."}
               onSend={(value) => commandMutation.mutate(value)}

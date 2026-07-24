@@ -251,9 +251,11 @@ class EmployeeAsset(BaseModel):
 
     employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
     asset_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    asset_name: Mapped[str | None] = mapped_column(String(120))
     asset_code: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    validity_date: Mapped[date | None] = mapped_column(Date)
     asset_status: Mapped[AssetStatus] = mapped_column(String(40), nullable=False, default=AssetStatus.ASSIGNED)
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
 
