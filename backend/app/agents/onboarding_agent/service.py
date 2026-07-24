@@ -223,7 +223,7 @@ class OnboardingAgent(BaseAgent):
             and progress["welcome_kit_ready"]
             and employee.welcome_kit_sent_at is None
         ):
-            if send_welcome_email(employee):
+            if send_welcome_email(employee, self.db):
                 employee.welcome_kit_sent_at = datetime.now(timezone.utc)
                 self.db.add(
                     AuditLog(
@@ -399,7 +399,7 @@ class OnboardingAgent(BaseAgent):
                 # Mirror the manual send-welcome-kit endpoint: actually send the
                 # email, and only stamp welcome_kit_sent_at if it succeeded (no
                 # false "sent"). On failure the step stays pending and re-prompts.
-                sent = send_welcome_email(employee)
+                sent = send_welcome_email(employee, self.db)
                 if sent:
                     employee.welcome_kit_sent_at = datetime.now(timezone.utc)
                     self.db.add(

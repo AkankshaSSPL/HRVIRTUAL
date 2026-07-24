@@ -9,10 +9,20 @@ import { getLookups } from "@/services/lookups";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
 
+const TABS = [
+  { id: "personal", label: "Personal" },
+  { id: "employment", label: "Employment" },
+  { id: "bank", label: "Bank & Statutory" },
+  { id: "payroll", label: "Payroll" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
 export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: string | null; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<EmployeeCreatePayload>>(emptyForm);
   const [currentSalary, setCurrentSalary] = useState("");
+  const [activeTab, setActiveTab] = useState<TabId>("personal");
   const employeeQuery = useQuery({ queryKey: ["employee-detail", employeeId], queryFn: () => getEmployee(employeeId!), enabled: Boolean(open && employeeId) });
   const optionsQuery = useQuery({ queryKey: ["employee-form-options"], queryFn: getEmployeeFormOptions, enabled: open });
   const lookupsQuery = useQuery({
@@ -58,6 +68,11 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
     setCurrentSalary(employee.current_salary != null ? String(employee.current_salary) : "");
   }, [employeeQuery.data]);
 
+  // Reset to the first tab each time the drawer is opened for a (possibly different) employee.
+  useEffect(() => {
+    if (open) setActiveTab("personal");
+  }, [open, employeeId]);
+
   function setValue(key: keyof EmployeeCreatePayload, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
@@ -72,7 +87,9 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
       {employeeQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading employee details...</p> : null}
       {employeeQuery.data ? (
         <div className="space-y-5">
-          <FormSection title="Personal details">
+          <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+
+          <div className={activeTab === "personal" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="First name"><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
             <Field label="Last name"><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
             <Field label="Official email"><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
@@ -80,8 +97,9 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             <Field label="Phone"><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
             <Field label="Date of birth"><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
             <Field label="Gender"><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
-          </FormSection>
-          <FormSection title="Employment details">
+          </div>
+
+          <div className={activeTab === "employment" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="Employee code"><Input value={form.employee_code ?? ""} onChange={(event) => setValue("employee_code", event.target.value)} /></Field>
             <Field label="Joining date"><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
             <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} /></Field>
@@ -89,15 +107,17 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             <Field label="Department"><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
             <Field label="Designation"><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
             <Field label="Reporting manager"><Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).filter((item) => item.id !== employeeId).map((item) => [item.id, item.name])]} /></Field>
-          </FormSection>
-          <FormSection title="Bank and statutory details">
+          </div>
+
+          <div className={activeTab === "bank" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="Bank account number"><Input value={form.bank_account_number ?? ""} onChange={(event) => setValue("bank_account_number", event.target.value)} /></Field>
             <Field label="IFSC code"><Input value={form.ifsc_code ?? ""} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} /></Field>
             <Field label="PAN number"><Input value={form.pan_number ?? ""} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} /></Field>
             <Field label="Aadhaar number"><Input value={form.aadhaar_number ?? ""} onChange={(event) => setValue("aadhaar_number", event.target.value)} /></Field>
             <Field label="UAN number"><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
-          </FormSection>
-          <FormSection title="Payroll">
+          </div>
+
+          <div className={activeTab === "payroll" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="Current salary">
               <Input
                 type="number"
@@ -106,7 +126,8 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
                 onChange={(event) => setCurrentSalary(event.target.value)}
               />
             </Field>
-          </FormSection>
+          </div>
+
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Employee update could not be saved.</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -120,8 +141,36 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   );
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="space-y-3"><h3 className="border-b pb-2 text-sm font-semibold">{title}</h3><div className="grid gap-3 sm:grid-cols-2">{children}</div></section>;
+function TabBar({
+  tabs,
+  activeTab,
+  onChange,
+}: {
+  tabs: ReadonlyArray<{ id: TabId; label: string }>;
+  activeTab: TabId;
+  onChange: (id: TabId) => void;
+}) {
+  return (
+    <div className="flex gap-1 border-b">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            className={
+              isActive
+                ? "rounded-t-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                : "rounded-t-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+            }
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

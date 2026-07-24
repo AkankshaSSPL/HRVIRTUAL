@@ -1206,142 +1206,110 @@ function EmployeeMonthlyAttendancePanel({
   onPrevious: () => void;
   onNext: () => void;
 }) {
-  const statuses = [
-    ["Present", summary.present_days ?? 0, "bg-emerald-500"],
-    ["Work From Home", summary.wfh_days ?? 0, "bg-cyan-500"],
-    ["Paid Leave", summary.paid_leave_days ?? 0, "bg-violet-500"],
-    ["Absent", summary.absent_days ?? 0, "bg-rose-500"],
-    ["Half Day", summary.half_days ?? 0, "bg-amber-500"],
-  ];
-  const calendarStyles: Record<string, string> = {
-    PRESENT: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    WORK_FROM_HOME: "border-cyan-400 bg-cyan-100 text-cyan-800",
-    WFH: "border-cyan-400 bg-cyan-100 text-cyan-800",
-    PAID_LEAVE: "border-violet-400 bg-violet-100 text-violet-700",
-    UNPAID_LEAVE: "border-red-500 bg-red-100 text-red-700",
-    ABSENT: "border-rose-400 bg-rose-100 text-rose-700",
-    HALF_DAY: "border-amber-400 bg-amber-100 text-amber-800",
-    WEEKEND: "border-slate-400 bg-slate-200 text-slate-600",
-    HOLIDAY: "border-blue-200 bg-blue-50 text-blue-700",
-    MISSING: "border-zinc-200 bg-zinc-50 text-zinc-400",
-  };
-  const records = (summary.records ?? []) as Array<Record<string, any>>;
   const monthLabel = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(
     new Date(Number(summary.year), Number(summary.month) - 1, 1),
   );
-  const calendarOffset = new Date(Number(summary.year), Number(summary.month) - 1, 1).getDay();
-  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  function calendarIcon(status: string) {
-    if (status === "ABSENT") return <X className="h-4 w-4 stroke-[2.5] text-rose-600" />;
-    if (status === "PAID_LEAVE") return <Flag className="h-4 w-4 text-violet-700" />;
-    if (status === "UNPAID_LEAVE") return <Flag className="h-4 w-4 fill-red-600 text-red-700" />;
-    if (status === "WORK_FROM_HOME" || status === "WFH") return <Home className="h-4 w-4 stroke-[2.5] text-cyan-700" />;
-    if (status === "WEEKEND") return <Ban className="h-4 w-4 text-slate-500" />;
-    return null;
-  }
-  function summaryIcon(label: string, color: string) {
-    if (label === "Absent") return <X className="h-3.5 w-3.5 text-rose-600" />;
-    if (label === "Work From Home") return <Home className="h-3.5 w-3.5 text-cyan-700" />;
-    return <span className={cn("h-2 w-2 rounded-full", color)} />;
-  }
+  const stats: Array<{
+    label: string;
+    value: number;
+    icon: ReactNode;
+    tint: string;
+    border: string;
+    text: string;
+    iconBg: string;
+  }> = [
+    {
+      label: "Present",
+      value: summary.present_days ?? 0,
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      tint: "bg-emerald-50",
+      border: "border-emerald-200",
+      text: "text-emerald-700",
+      iconBg: "bg-emerald-500",
+    },
+    {
+      label: "Work From Home",
+      value: summary.wfh_days ?? 0,
+      icon: <Home className="h-4 w-4" />,
+      tint: "bg-cyan-50",
+      border: "border-cyan-200",
+      text: "text-cyan-700",
+      iconBg: "bg-cyan-500",
+    },
+    {
+      label: "Paid Leave",
+      value: summary.paid_leave_days ?? 0,
+      icon: <Flag className="h-4 w-4" />,
+      tint: "bg-violet-50",
+      border: "border-violet-200",
+      text: "text-violet-700",
+      iconBg: "bg-violet-500",
+    },
+    {
+      label: "Absent",
+      value: summary.absent_days ?? 0,
+      icon: <X className="h-4 w-4" />,
+      tint: "bg-rose-50",
+      border: "border-rose-200",
+      text: "text-rose-700",
+      iconBg: "bg-rose-500",
+    },
+    {
+      label: "Half Day",
+      value: summary.half_days ?? 0,
+      icon: <Ban className="h-4 w-4" />,
+      tint: "bg-amber-50",
+      border: "border-amber-200",
+      text: "text-amber-700",
+      iconBg: "bg-amber-500",
+    },
+  ];
 
   return (
-    <>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold">Monthly Summary</p>
-            <p className="text-xs text-muted-foreground">{monthLabel}</p>
-          </div>
-          <StatusBadge status={`${summary.payable_days ?? 0}/${summary.working_days ?? 0} payable`} tone="info" />
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b bg-gradient-to-r from-muted/60 via-muted/20 to-transparent px-5 py-4">
+        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={onPrevious} aria-label="Previous month">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="text-center">
+          <p className="text-base font-semibold tracking-tight">{monthLabel}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Monthly attendance summary</p>
         </div>
-        <div className="divide-y px-4">
-          {statuses.map(([label, value, color]) => (
-            <div key={String(label)} className="flex h-9 items-center justify-between text-sm">
-              <span className="inline-flex items-center gap-2 text-muted-foreground">
-                {summaryIcon(String(label), String(color))}
-                {label}
+        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={onNext} aria-label="Next month">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
+        {stats.map((stat) => (
+          <div key={stat.label} className={cn("rounded-lg border p-3 transition-shadow hover:shadow-md", stat.tint, stat.border)}>
+            <div className="flex items-center gap-2">
+              <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white", stat.iconBg)}>
+                {stat.icon}
               </span>
-              <span className="font-semibold tabular-nums">{String(value)}</span>
+              <span className={cn("text-xs font-medium leading-tight", stat.text)}>{stat.label}</span>
             </div>
-          ))}
+            <p className={cn("mt-2 text-2xl font-bold tabular-nums", stat.text)}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 divide-x border-t bg-muted/30">
+        <div className="px-5 py-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">LOP Days</p>
+          <p className="mt-1.5 text-2xl font-bold tabular-nums">{summary.lop_days ?? 0}</p>
         </div>
-        <div className="grid grid-cols-2 border-t bg-muted/40">
-          <div className="border-r px-4 py-3">
-            <p className="text-xs text-muted-foreground">LOP Days</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{summary.lop_days ?? 0}</p>
-          </div>
-          <div className="px-4 py-3">
-            <p className="text-xs text-muted-foreground">Employment Type</p>
-            <p className="mt-1 text-sm font-semibold">{String(summary.employment_type ?? "FULL_TIME").replace(/_/g, " ")}</p>
-          </div>
+        <div className="px-5 py-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Employment Type</p>
+          <p className="mt-1.5 text-sm font-semibold">{String(summary.employment_type ?? "FULL_TIME").replace(/_/g, " ")}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-card p-3">
-        <div className="mb-3 flex items-center justify-between">
-          <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onPrevious} aria-label="Previous month">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-center">
-            <p className="text-sm font-semibold">{monthLabel}</p>
-            <p className="text-xs text-muted-foreground">{records.length} calendar days</p>
-          </div>
-          <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onNext} aria-label="Next month">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="mb-1.5 grid grid-cols-7 gap-1.5">
-          {weekdayLabels.map((label) => (
-            <div key={label} className="py-1 text-center text-[10px] font-medium uppercase text-muted-foreground">
-              {label}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {Array.from({ length: calendarOffset }).map((_, index) => (
-            <div key={`calendar-offset-${index}`} aria-hidden="true" className="aspect-square" />
-          ))}
-          {records.map((record) => {
-            const status = String(record.status ?? record.attendance_status ?? "MISSING")
-              .split(".")
-              .at(-1)!
-              .trim()
-              .toUpperCase()
-              .replace(/\s+/g, "_");
-            const day = String(record.date ?? record.attendance_date ?? "").slice(-2).replace(/^0/, "");
-            const icon = calendarIcon(status);
-            return (
-              <div
-                key={String(record.date ?? record.attendance_date)}
-                title={`${record.label ?? status.replace(/_/g, " ")} · ${record.date ?? record.attendance_date}`}
-                className={cn(
-                  "relative flex aspect-square min-w-0 items-center justify-center rounded-md border text-xs font-medium tabular-nums",
-                  status === "WEEKEND" && "border-dashed",
-                  calendarStyles[status] ?? calendarStyles.MISSING,
-                )}
-              >
-                {icon ? (
-                  <>
-                    <span className="absolute left-1 top-0.5 text-[9px] opacity-75">{day}</span>
-                    {icon}
-                  </>
-                ) : (
-                  <span className="text-[11px]">{day}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 border-t pt-3 text-[10px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1"><Flag className="h-3 w-3 text-violet-700" /> Paid leave</span>
-          <span className="inline-flex items-center gap-1"><Flag className="h-3 w-3 fill-rose-500 text-rose-600" /> Unpaid leave</span>
-          <span className="inline-flex items-center gap-1"><X className="h-3 w-3 text-rose-600" /> Absent</span>
-          <span className="inline-flex items-center gap-1"><Home className="h-3 w-3 text-cyan-700" /> WFH</span>
-          <span className="inline-flex items-center gap-1"><Ban className="h-3 w-3 text-slate-400" /> Weekend</span>
-        </div>
+      <div className="flex items-center justify-between border-t px-5 py-3">
+        <span className="text-xs text-muted-foreground">Payable vs. working days</span>
+        <StatusBadge status={`${summary.payable_days ?? 0}/${summary.working_days ?? 0} payable`} tone="info" />
       </div>
-    </>
+    </div>
   );
 }
 
