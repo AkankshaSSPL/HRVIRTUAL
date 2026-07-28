@@ -14,6 +14,7 @@ from app.services.seat_service import (
     assign_seat,
     get_seats_summary,
     list_seats,
+    sync_seat_occupancy,
     update_seat_status,
     vacate_seat,
 )
@@ -56,6 +57,26 @@ def seats(db: Session = Depends(get_db)):
         "seats": [_seat_to_dict(seat) for seat in records],
         "summary": get_seats_summary(records),
     }
+
+
+@router.post("/sync", dependencies=[Depends(require_permissions("employees:manage"))])
+def sync(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = sync_seat_occupancy(db)
+    db.add(
+        AuditLog(
+            entity_type="seat",
+            entity_id=None,
+            action="seat.synced",
+            old_value=None,
+            new_value=result,
+            performed_by=current_user.id,
+        )
+    )
+    db.commit()
+    return result
 
 
 @router.post("/{seat_label}/assign", dependencies=[Depends(require_permissions("employees:manage"))])

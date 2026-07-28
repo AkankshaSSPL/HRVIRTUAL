@@ -1,9 +1,8 @@
 Folder PATH listing
-Volume serial number is 000000A0 2C52:297F
+Volume serial number is 00000003 2C52:297F
 C:.
 |   .gitignore
 |   backend-root.zip
-|   hrms_db.sql
 |   project_structure.txt
 |   README.md
 |   root-working-hrms.zip
@@ -45,6 +44,9 @@ C:.
 |   |   |   |   20260612_0023_expand_master_lookups.py
 |   |   |   |   20260612_0024_department_active_status.py
 |   |   |   |   20260720_0025_add_employee_welcome_kit_sent_at.py
+|   |   |   |   20260722_0026_add_employee_seat_label.py
+|   |   |   |   20260722_0027_add_seats_table.py
+|   |   |   |   20260723_0028_seed_asset_types.py
 |   |   |   |   
 |   |   |   \---__pycache__
 |   |   |           20260528_0001_initial_foundation.cpython-312.pyc
@@ -72,6 +74,9 @@ C:.
 |   |   |           20260612_0023_expand_master_lookups.cpython-312.pyc
 |   |   |           20260612_0024_department_active_status.cpython-312.pyc
 |   |   |           20260720_0025_add_employee_welcome_kit_sent_at.cpython-312.pyc
+|   |   |           20260722_0026_add_employee_seat_label.cpython-312.pyc
+|   |   |           20260722_0027_add_seats_table.cpython-312.pyc
+|   |   |           20260723_0028_seed_asset_types.cpython-312.pyc
 |   |   |           
 |   |   \---__pycache__
 |   |           env.cpython-310.pyc
@@ -193,6 +198,7 @@ C:.
 |   |   |   |   |   api.py
 |   |   |   |   |   graph.py
 |   |   |   |   |   handlers.py
+|   |   |   |   |   llm.py
 |   |   |   |   |   prompt.py
 |   |   |   |   |   schemas.py
 |   |   |   |   |   service.py
@@ -202,6 +208,7 @@ C:.
 |   |   |   |   \---__pycache__
 |   |   |   |           api.cpython-312.pyc
 |   |   |   |           handlers.cpython-312.pyc
+|   |   |   |           llm.cpython-312.pyc
 |   |   |   |           schemas.cpython-312.pyc
 |   |   |   |           service.cpython-312.pyc
 |   |   |   |           tools.cpython-312.pyc
@@ -339,6 +346,7 @@ C:.
 |   |   |   |   |   __init__.py
 |   |   |   |   |   
 |   |   |   |   +---endpoints
+|   |   |   |   |   |   assets.py
 |   |   |   |   |   |   auth.py
 |   |   |   |   |   |   documents.py
 |   |   |   |   |   |   employees.py
@@ -346,9 +354,11 @@ C:.
 |   |   |   |   |   |   lookups.py
 |   |   |   |   |   |   masters.py
 |   |   |   |   |   |   payroll.py
+|   |   |   |   |   |   seats.py
 |   |   |   |   |   |   __init__.py
 |   |   |   |   |   |   
 |   |   |   |   |   \---__pycache__
+|   |   |   |   |           assets.cpython-312.pyc
 |   |   |   |   |           auth.cpython-312.pyc
 |   |   |   |   |           documents.cpython-312.pyc
 |   |   |   |   |           employees.cpython-312.pyc
@@ -356,6 +366,7 @@ C:.
 |   |   |   |   |           lookups.cpython-312.pyc
 |   |   |   |   |           masters.cpython-312.pyc
 |   |   |   |   |           payroll.cpython-312.pyc
+|   |   |   |   |           seats.cpython-312.pyc
 |   |   |   |   |           __init__.cpython-312.pyc
 |   |   |   |   |           
 |   |   |   |   \---__pycache__
@@ -472,16 +483,20 @@ C:.
 |   |   |           
 |   |   +---services
 |   |   |   |   auth_service.py
+|   |   |   |   email_service.py
 |   |   |   |   lop_calculator.py
 |   |   |   |   onboarding_progress.py
 |   |   |   |   payroll_preparation_service.py
+|   |   |   |   seat_service.py
 |   |   |   |   __init__.py
 |   |   |   |   
 |   |   |   \---__pycache__
 |   |   |           auth_service.cpython-312.pyc
+|   |   |           email_service.cpython-312.pyc
 |   |   |           lop_calculator.cpython-312.pyc
 |   |   |           onboarding_progress.cpython-312.pyc
 |   |   |           payroll_preparation_service.cpython-312.pyc
+|   |   |           seat_service.cpython-312.pyc
 |   |   |           __init__.cpython-312.pyc
 |   |   |           
 |   |   +---utils
@@ -508,6 +523,7 @@ C:.
 |   \---uploads
 |       \---documents
 |               06df780b-f975-4ecb-a845-81a99c61dc5b.png
+|               5adfb3ce-c4af-4492-95fc-324de22adb4b.png
 |               
 +---frontend
 |   |   .env.example
@@ -521,6 +537,11 @@ C:.
 |   |   tsconfig.node.json
 |   |   vite.config.ts
 |   |   
+|   +---.vite
+|   |   \---deps
+|   |           package.json
+|   |           _metadata.json
+|   |           
 |   +---node_modules
 |   |   |   .package-lock.json
 |   |   |   
@@ -12919,6 +12940,9 @@ C:.
 |       |   +---employees
 |       |   |       EmployeeCreateWizard.tsx
 |       |   |       EmployeeEditDrawer.tsx
+|       |   |       OnboardingProgressBar.tsx
+|       |   |       OnboardingStatusPanel.tsx
+|       |   |       SeatingAllocationModal.tsx
 |       |   |       
 |       |   +---ui
 |       |   |       badge.tsx
@@ -12981,6 +13005,7 @@ C:.
 |       |       OnboardingPage.tsx
 |       |       PayrollPage.tsx
 |       |       PlaceholderPage.tsx
+|       |       SeatsPage.tsx
 |       |       UnauthorizedPage.tsx
 |       |       
 |       +---routes
@@ -12990,6 +13015,7 @@ C:.
 |       |       agents.ts
 |       |       api.ts
 |       |       approvals.ts
+|       |       assets.ts
 |       |       attendance.ts
 |       |       auth.ts
 |       |       documents.ts
@@ -12999,6 +13025,7 @@ C:.
 |       |       masters.ts
 |       |       payroll.ts
 |       |       salaryAssignments.ts
+|       |       seats.ts
 |       |       
 |       +---stores
 |       |       appStore.ts

@@ -101,3 +101,49 @@ def update_seat_status(db: Session, seat_label: str, new_status: str) -> tuple[S
     old_status = seat.status
     seat.status = new_status
     return seat, old_status
+
+
+def sync_seat_occupancy(db: Session) -> dict[str, int]:
+    """
+    Backfill seats.status/employee_id from employees.seat_label for any
+    employee whose seat_label was set before the seats table's status ever
+    reflected it (e.g. historical rows from before seat assignment went
+    through assign_seat()). Idempotent — safe to call repeatedly.
+    Caller is responsible for db.commit().
+
+    Returns a summary of what changed: how many seats were newly marked
+    OCCUPIED, and how many employee seat_labels pointed at a seat that
+    doesn't exist or was already claimed by someone else (skipped, logged
+    for the caller to investigate rather than silently overwritten).
+    """
+    employees_with_seats = db.scalars(
+        select(Employee).where(Employee.deleted_at.is_(None), Employee.seat_label.isnot(None))
+    ).all()
+
+    synced = 0
+    skipped_missing_seat = 0
+    skipped_conflict = 0
+
+    for employee in employees_with_seats:
+        seat = db.scalar(select(Seat).where(Seat.label == employee.seat_label))
+        if not seat:
+            skipped_missing_seat += 1
+            continue
+        if seat.employee_id and seat.employee_id != employee.id:
+            # Seat already claimed by a different employee's seat_label — a
+            # genuine data conflict, not something this sync should resolve
+            # by picking a winner. Leave it for manual review.
+            skipped_conflict += 1
+            continue
+        if seat.status == SeatStatus.OCCUPIED.value and seat.employee_id == employee.id:
+            continue  # already in sync
+
+        seat.status = SeatStatus.OCCUPIED.value
+        seat.employee_id = employee.id
+        synced += 1
+
+    return {
+        "synced": synced,
+        "skipped_missing_seat": skipped_missing_seat,
+        "skipped_conflict": skipped_conflict,
+    }
