@@ -106,7 +106,7 @@ export function EmployeesPage() {
             searchPlaceholder="Search employees, departments, managers"
             renderRowActions={(employee) => (
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" aria-label="View employee profile" onClick={() => navigate(`/employees/${employee.id}`)}><Eye className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" aria-label="View employee profile" onClick={() => navigate(`/employees/${employee.id}/view`)}><Eye className="h-4 w-4" /></Button>
                 <Button variant="ghost" size="icon" aria-label="Edit employee" onClick={() => setEditingEmployeeId(employee.id)}><Pencil className="h-4 w-4" /></Button>
                 <Button variant="ghost" size="icon" aria-label="Delete employee" onClick={() => setDeletingEmployee(employee)}><Trash2 className="h-4 w-4 text-rose-600" /></Button>
               </div>

@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/services/api";
+import type { AssetRecord } from "@/services/assets";
 
 export type EmployeeRecord = {
   id: string;
@@ -105,6 +106,7 @@ export type OnboardingProgress = {
   completed: string[];
   pending: string[];
   welcome_kit_ready: boolean;
+  assets?: AssetRecord[];
 };
 
 export function getEmployeeOnboardingProgress(employeeId: string) {
@@ -119,8 +121,35 @@ export function deactivateEmployee(employeeId: string) {
   return apiPost<EmployeeRecord>(`/employees/${employeeId}/deactivate`, {});
 }
 
-export function setEmployeeSeat(employeeId: string, seatLabel: string) {
-  return apiPost<OnboardingProgress>(`/employees/${employeeId}/seat`, { seat_label: seatLabel });
+export function setEmployeeSeat(
+  employeeId: string,
+  seatLabel: string,
+  optionalAssets: string[] = [],
+  assetNames: Record<string, string> = {},
+) {
+  return apiPost<OnboardingProgress>(`/employees/${employeeId}/seat`, {
+    seat_label: seatLabel,
+    optional_assets: optionalAssets,
+    asset_names: assetNames,
+  });
+}
+
+/**
+ * Save optional assets (and brand/model names) for an employee who already
+ * has a seat, without touching seat occupancy. Use this instead of
+ * `setEmployeeSeat` whenever the seat isn't changing — re-submitting the
+ * current seat through `/seat` fails with a 400 because that endpoint
+ * requires the seat to be in an assignable (non-OCCUPIED) status.
+ */
+export function assignOnboardingAssets(
+  employeeId: string,
+  optionalAssets: string[] = [],
+  assetNames: Record<string, string> = {},
+) {
+  return apiPost<OnboardingProgress>(`/employees/${employeeId}/assets`, {
+    optional_assets: optionalAssets,
+    asset_names: assetNames,
+  });
 }
 
 export type EmployeeDocumentRecord = {
@@ -141,4 +170,14 @@ export function uploadEmployeeDocument(employeeId: string, documentType: string,
   formData.append("document_type", documentType);
   formData.append("file", file);
   return apiPost<EmployeeDocumentRecord>("/documents", formData);
+}
+
+/**
+ * Documents belonging to a single employee, for the read-only profile view.
+ * Mirrors the `employee_id` filter already used by uploadEmployeeDocument's
+ * POST target. If your backend exposes documents under a different path
+ * (e.g. a dedicated /employees/:id/documents route), update the URL below.
+ */
+export function getEmployeeDocuments(employeeId: string) {
+  return apiGet<EmployeeDocumentRecord[]>(`/documents?employee_id=${employeeId}`);
 }

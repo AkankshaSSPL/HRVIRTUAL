@@ -4,13 +4,12 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agents.employee_agent.tools import (
     create_employee_draft,
-    deactivate_employee,
     employee_profile,
     employee_to_summary,
     generate_next_employee_code,
@@ -25,6 +24,8 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.auth import User
 from app.models.employee import Department, Designation, Employee
+from app.models.employee.models import EmployeeAsset
+from app.services.asset_service import asset_to_dict, assign_onboarding_assets
 from app.services.onboarding_progress import compute_onboarding_progress
 from app.services.email_service import send_welcome_email  # <-- NEW import
 from app.services.seat_service import assign_seat
@@ -93,6 +94,14 @@ class EmployeeUpdateRequest(BaseModel):
 
 class SeatAssignmentRequest(BaseModel):
     seat_label: str
+    optional_assets: list[str] = Field(default_factory=list)
+    asset_names: dict[str, str] = Field(default_factory=dict)
+
+
+class AssetAssignmentRequest(BaseModel):
+    """Assets-only payload — does not touch seat occupancy at all."""
+    optional_assets: list[str] = Field(default_factory=list)
+    asset_names: dict[str, str] = Field(default_factory=dict)
 
 
 @router.get("", response_model=EmployeeListResponse, dependencies=[Depends(require_permissions("employees:view"))])
@@ -207,6 +216,8 @@ def assign_employee_seat(
 ):
     try:
         seat, employee, old_seat_label = assign_seat(db, payload.seat_label, employee_id)
+        created_assets = assign_onboarding_assets(db, employee, payload.optional_assets, payload.asset_names)
+
         db.add(
             AuditLog(
                 entity_type="employee",
@@ -217,11 +228,78 @@ def assign_employee_seat(
                 performed_by=current_user.id,
             )
         )
+        if created_assets:
+            db.add(
+                AuditLog(
+                    entity_type="employee",
+                    entity_id=employee.id,
+                    action="employee.onboarding_assets_assigned",
+                    old_value=None,
+                    new_value={"asset_types": [a.asset_type for a in created_assets]},
+                    performed_by=current_user.id,
+                )
+            )
+
         db.commit()
-        return compute_onboarding_progress(db, employee)
+        progress = compute_onboarding_progress(db, employee)
+        progress["assets"] = [asset_to_dict(a) for a in created_assets]
+        return progress
     except LookupError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{employee_id}/assets", dependencies=[Depends(require_permissions("employees:manage"))])
+def assign_employee_assets(
+    employee_id: UUID,
+    payload: AssetAssignmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Save optional assets (and brand/model names) for an employee who already
+    has a seat, without going through seat assignment at all. Unlike
+    `/seat`, this never raises on an already-OCCUPIED seat — it doesn't
+    look at seat status in the first place.
+    """
+    employee = get_employee_by_id(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if not employee.seat_label:
+        raise HTTPException(
+            status_code=400,
+            detail="Assign a seat before adding onboarding assets. Use the seat assignment step first.",
+        )
+
+    try:
+        created_assets = assign_onboarding_assets(db, employee, payload.optional_assets, payload.asset_names)
+
+        if created_assets:
+            db.add(
+                AuditLog(
+                    entity_type="employee",
+                    entity_id=employee.id,
+                    action="employee.onboarding_assets_assigned",
+                    old_value=None,
+                    new_value={"asset_types": [a.asset_type for a in created_assets]},
+                    performed_by=current_user.id,
+                )
+            )
+
+        db.commit()
+        progress = compute_onboarding_progress(db, employee)
+        all_assets = db.scalars(
+            select(EmployeeAsset).where(
+                EmployeeAsset.employee_id == employee.id,
+                EmployeeAsset.deleted_at.is_(None),
+                EmployeeAsset.asset_status == "ASSIGNED",
+            )
+        ).all()
+        progress["assets"] = [asset_to_dict(a) for a in all_assets]
+        return progress
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -290,8 +368,14 @@ def deactivate_employee_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    "Deactivate" now soft-deletes the employee (sets deleted_at), which is
+    what actually removes them from the Employees list and search results —
+    just flipping employment_status to SUSPENDED left the record fully
+    visible everywhere, which wasn't the intent of this button.
+    """
     try:
-        employee, old_value, new_value = deactivate_employee(db, employee_id)
+        employee, old_value, new_value = soft_delete_employee(db, employee_id)
         db.add(
             AuditLog(
                 entity_type="employee",

@@ -42,7 +42,7 @@ def compute_onboarding_progress(db: Session, employee: Employee) -> dict[str, An
         {"key": "payroll_readiness", "label": "Payroll readiness", "complete": payroll_complete, "tab": "Payroll Impact"},
         {"key": "salary", "label": "Salary", "complete": salary_complete, "tab": "Salary"},
         {"key": "documents", "label": "Documents", "complete": documents_complete, "tab": "Documents"},
-        {"key": "seating", "label": "Seating", "complete": seating_complete, "tab": "Personal"},
+        {"key": "seating", "label": "Seating and assets", "complete": seating_complete, "tab": "Personal"},
         {"key": "welcome_mail", "label": "Welcome mail", "complete": welcome_mail_complete, "tab": "Personal"},
     ]
     completed = [item["label"] for item in items if item["complete"]]

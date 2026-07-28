@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_permissions
@@ -10,6 +10,11 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.auth import User
 from app.models.employee import Seat
+from app.services.asset_service import (
+    OPTIONAL_ONBOARDING_ASSETS,
+    asset_to_dict,
+    assign_onboarding_assets,
+)
 from app.services.seat_service import (
     assign_seat,
     get_seats_summary,
@@ -44,6 +49,7 @@ def _seat_to_dict(seat: Seat) -> dict[str, Any]:
 
 class SeatAssignRequest(BaseModel):
     employee_id: UUID
+    optional_assets: list[str] = Field(default_factory=list)
 
 
 class SeatStatusUpdateRequest(BaseModel):
@@ -57,6 +63,12 @@ def seats(db: Session = Depends(get_db)):
         "seats": [_seat_to_dict(seat) for seat in records],
         "summary": get_seats_summary(records),
     }
+
+
+@router.get("/optional-assets", dependencies=[Depends(require_permissions("employees:view"))])
+def optional_assets():
+    """Asset types HR can optionally tick in the seating modal, beyond the standard kit."""
+    return {"types": OPTIONAL_ONBOARDING_ASSETS}
 
 
 @router.post("/sync", dependencies=[Depends(require_permissions("employees:manage"))])
@@ -88,6 +100,8 @@ def assign(
 ):
     try:
         seat, employee, old_seat_label = assign_seat(db, seat_label, payload.employee_id)
+        created_assets = assign_onboarding_assets(db, employee, payload.optional_assets)
+
         db.add(
             AuditLog(
                 entity_type="seat",
@@ -98,9 +112,23 @@ def assign(
                 performed_by=current_user.id,
             )
         )
+        if created_assets:
+            db.add(
+                AuditLog(
+                    entity_type="employee_asset",
+                    entity_id=employee.id,
+                    action="asset.onboarding_assigned",
+                    old_value=None,
+                    new_value={"asset_types": [a.asset_type for a in created_assets]},
+                    performed_by=current_user.id,
+                )
+            )
+
         db.commit()
         db.refresh(seat)
-        return _seat_to_dict(seat)
+        result = _seat_to_dict(seat)
+        result["assets"] = [asset_to_dict(a) for a in created_assets]
+        return result
     except LookupError as exc:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -7,6 +7,7 @@ import { AttendancePage } from "@/pages/AttendancePage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DocumentsPage } from "@/pages/DocumentsPage";
 import { EmployeeProfilePage } from "@/pages/EmployeeProfilePage";
+import { EmployeeViewPage } from "@/pages/EmployeeViewPage";
 import { EmployeesPage } from "@/pages/EmployeesPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MastersPage } from "@/pages/MastersPage";
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
   { element: <ProtectedRoute permission="dashboard:view" />, children: [{ path: "/dashboard", element: <DashboardPage /> }] },
   { element: <ProtectedRoute permission="employees:view" />, children: [{ path: "/employees", element: <EmployeesPage /> }] },
   { element: <ProtectedRoute permission="employees:view" />, children: [{ path: "/employees/:id", element: <EmployeeProfilePage /> }] },
+  { element: <ProtectedRoute permission="employees:view" />, children: [{ path: "/employees/:id/view", element: <EmployeeViewPage /> }] },
   { element: <ProtectedRoute permission="onboarding:view" />, children: [{ path: "/onboarding", element: <OnboardingPage /> }] },
   { element: <ProtectedRoute permission="employees:view" />, children: [{ path: "/seats", element: <SeatsPage /> }] },
   { element: <ProtectedRoute permission="candidates:view" />, children: [{ path: "/candidates", element: <PlaceholderPage title="Candidates" /> }] },

@@ -433,27 +433,13 @@ def _parse_employment_status(value: Any) -> EmploymentStatus | None:
     return EmploymentStatus(str(value).upper())
 
 
-_EMPLOYMENT_TYPE_MAP = {
-    "PART_TIME": EmploymentType.FULL_TIME,
-    "PART-TIME": EmploymentType.FULL_TIME,
-    "CONTRACT": EmploymentType.CONSULTANT,
-    "FREELANCE": EmploymentType.CONSULTANT,
-    "INTERN": EmploymentType.FULL_TIME,
-    "INTERNSHIP": EmploymentType.FULL_TIME,
-    "TEMPORARY": EmploymentType.FULL_TIME,
-}
-
-
 def _parse_employment_type(value: Any) -> EmploymentType | None:
     if not value:
         return None
     if isinstance(value, EmploymentType):
         return value
     normalized = str(value).strip().upper().replace(" ", "_").replace("-", "_")
-    try:
-        return EmploymentType(normalized)
-    except ValueError:
-        return _EMPLOYMENT_TYPE_MAP.get(normalized, EmploymentType.FULL_TIME)
+    return EmploymentType(normalized)
 
 
 def _parse_date(value: Any) -> date | None:

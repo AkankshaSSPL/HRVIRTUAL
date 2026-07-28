@@ -126,10 +126,17 @@ type StructuredResponse = {
   employee_id?: string; // <-- onboarding_finishing: the created employee
 };
 
+const EARLY_STEP_ORDER = ["personal_details", "employment_details", "payroll_readiness", "salary"];
 const FINISHING_STEP_ORDER = ["documents", "seating", "welcome_mail"];
 
 function firstPendingFinishingStep(progress: OnboardingProgress): string | null {
   const byKey = new Map(progress.items.map((item) => [item.key, item]));
+  // Don't infer a documents/seating/welcome_mail hint while any earlier
+  // step is still pending -- otherwise "documents" always looks pending
+  // (nobody's uploaded one yet) even at 0%, and the wrong contextual
+  // banner shows up while the agent is still asking for basic details.
+  const earlyStepsDone = EARLY_STEP_ORDER.every((key) => byKey.get(key)?.complete);
+  if (!earlyStepsDone) return null;
   for (const key of FINISHING_STEP_ORDER) {
     const item = byKey.get(key);
     if (item && !item.complete) return key;
