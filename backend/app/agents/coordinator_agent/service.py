@@ -205,7 +205,8 @@ class CoordinatorRuntimeService:
             )
             fallback_route = self._analyze_intent(command, user_id)
             fallback_is_meaningful = fallback_route.get("matched_intent") != "general workforce"
-            if extraction.missing_fields or (extraction.confidence < settings.intent_confidence_threshold and not fallback_is_meaningful):
+            is_onboarding_continuation = fallback_route.get("matched_intent") == "onboarding finishing conversation"
+            if not is_onboarding_continuation and (extraction.missing_fields or (extraction.confidence < settings.intent_confidence_threshold and not fallback_is_meaningful)):
                 result = self._clarification_result(extraction)
                 state.workflow_status = WorkflowStatus.COMPLETED
                 state.current_step = "needs_clarification"
