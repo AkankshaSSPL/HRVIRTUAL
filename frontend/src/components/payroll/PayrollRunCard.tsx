@@ -1,0 +1,114 @@
+import { cn } from "@/lib/utils";
+import { useAgentTheme } from "@/lib/agent-theme";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui-system/StatusBadge";
+import { Download, FileSpreadsheet, CheckCircle, Clock } from "lucide-react";
+
+interface PayrollRunCardProps {
+  runId: string;
+  month: string; // "July 2026"
+  status: string; // "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "BANK_SHEET_GENERATED" | "COMPLETED"
+  employeeCount: number;
+  skipped?: string[];
+  exportsLocked: boolean;
+  onExport: (type: "employee" | "consultant" | "bank" | "tds") => void;
+  onSubmitApproval?: () => void; // undefined hides the button
+}
+
+const STATUS_LABELS: Record<string, { label: string; tone: "success" | "warning" | "neutral" | "error" }> = {
+  DRAFT: { label: "Draft", tone: "neutral" },
+  PENDING_APPROVAL: { label: "Pending Approval", tone: "warning" },
+  APPROVED: { label: "Approved", tone: "success" },
+  BANK_SHEET_GENERATED: { label: "Bank Sheet Sent", tone: "success" },
+  COMPLETED: { label: "Completed", tone: "success" },
+};
+
+export function PayrollRunCard({
+  runId,
+  month,
+  status,
+  employeeCount,
+  skipped = [],
+  exportsLocked,
+  onExport,
+  onSubmitApproval,
+}: PayrollRunCardProps) {
+  const theme = useAgentTheme("payroll");
+  const statusInfo = STATUS_LABELS[status] ?? { label: status, tone: "neutral" };
+
+  const exports = [
+    { type: "employee" as const, label: "Employee Sheet" },
+    { type: "consultant" as const, label: "Consultant Sheet" },
+    { type: "tds" as const, label: "TDS Sheet" },
+    { type: "bank" as const, label: "Bank Sheet", requiresApproval: true },
+  ];
+
+  return (
+    <div className={cn("space-y-4 rounded-lg border p-4 shadow-sm", theme.soft)} data-run-id={runId}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md border", theme.icon)}>
+            <FileSpreadsheet className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="font-semibold">{month} Payroll</p>
+            <p className="text-xs text-muted-foreground">{employeeCount} employees processed</p>
+          </div>
+        </div>
+        <StatusBadge status={statusInfo.label} tone={statusInfo.tone} />
+      </div>
+
+      {skipped.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <span className="font-medium">Skipped ({skipped.length}):</span> {skipped.join(", ")}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground">Export Sheets</p>
+        <div className="flex flex-wrap gap-2">
+          {exports.map((exp) => {
+            const locked = Boolean(exp.requiresApproval) && exportsLocked;
+            return (
+              <Button
+                key={exp.type}
+                size="sm"
+                variant="outline"
+                disabled={locked}
+                onClick={() => !locked && onExport(exp.type)}
+                className={cn(locked && "opacity-40")}
+              >
+                <Download className="h-3 w-3 mr-1.5" />
+                {exp.label}
+                {locked && (
+                  <span className="ml-1.5 rounded-sm bg-amber-100 px-1 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    Needs Approval
+                  </span>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      {status === "DRAFT" && onSubmitApproval && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">
+            Review payroll and submit to finance for approval.
+          </p>
+          <Button size="sm" onClick={onSubmitApproval}>
+            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+            Submit for Approval
+          </Button>
+        </div>
+      )}
+
+      {status === "PENDING_APPROVAL" && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          Awaiting finance approval. Bank sheet will unlock after approval.
+        </div>
+      )}
+    </div>
+  );
+}

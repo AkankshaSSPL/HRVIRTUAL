@@ -46,6 +46,8 @@ import { useAuthStore } from "@/stores/authStore";
 import { uploadEmployeeDocument, type OnboardingProgress } from "@/services/employees"; // <-- NEW
 import { OnboardingStatusPanel } from "@/components/employees/OnboardingStatusPanel";
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
+import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
+import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
 
 const suggestedActions = [
   "Show employees",
@@ -124,6 +126,15 @@ type StructuredResponse = {
   awaiting_upload?: { employee_id: string; document_type: string } | null; // <-- NEW
   progress?: OnboardingProgress; // <-- onboarding_finishing: the 7-step progress
   employee_id?: string; // <-- onboarding_finishing: the created employee
+  // payroll_summary / payroll_export (PayrollAgent._payroll_summary_response / ._export)
+  run_id?: string;
+  month?: number;
+  year?: number;
+  employee_count?: number;
+  skipped?: string[];
+  exports_locked?: boolean;
+  filename?: string;
+  download_url?: string;
 };
 
 const EARLY_STEP_ORDER = ["personal_details", "employment_details", "payroll_readiness", "salary"];
@@ -789,6 +800,34 @@ function BusinessResponse({
           </div>
         )) : <p className="text-sm text-muted-foreground">No pending salary approvals.</p>}
       </div>
+    );
+  }
+
+  if (structuredResponse?.type === "payroll_summary") {
+    const month = structuredResponse.month ?? new Date().getMonth() + 1;
+    const year = structuredResponse.year ?? new Date().getFullYear();
+    const monthLabel = `${new Intl.DateTimeFormat(undefined, { month: "long" }).format(new Date(year, month - 1, 1))} ${year}`;
+    const status = structuredResponse.status ?? "DRAFT";
+    return (
+      <PayrollRunCard
+        runId={structuredResponse.run_id ?? ""}
+        month={monthLabel}
+        status={status}
+        employeeCount={structuredResponse.employee_count ?? 0}
+        skipped={structuredResponse.skipped ?? []}
+        exportsLocked={structuredResponse.exports_locked ?? true}
+        onExport={(type) => onSend(`download ${type} sheet for ${monthLabel} payroll`)}
+        onSubmitApproval={status === "DRAFT" ? () => onSend(`submit ${monthLabel} payroll for approval`) : undefined}
+      />
+    );
+  }
+  if (structuredResponse?.type === "payroll_export") {
+    return (
+      <PayrollExportDownload
+        title={structuredResponse.title ?? "Payroll export"}
+        filename={structuredResponse.filename ?? ""}
+        downloadUrl={structuredResponse.download_url ?? ""}
+      />
     );
   }
 

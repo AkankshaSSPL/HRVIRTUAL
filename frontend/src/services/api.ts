@@ -2,6 +2,15 @@ import { useAuthStore } from "@/stores/authStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8001/api/v1";
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   return apiRequest<T>(path, { method: "GET" });
 }
@@ -47,7 +56,7 @@ async function apiRequest<T>(path: string, init: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `API request failed: ${response.status}`);
+    throw new ApiError(payload?.detail ?? `API request failed: ${response.status}`, response.status);
   }
   return response.json() as Promise<T>;
 }

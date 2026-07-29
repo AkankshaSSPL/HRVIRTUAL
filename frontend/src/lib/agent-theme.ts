@@ -162,6 +162,10 @@ export function agentThemeFor(agent?: string | null): AgentTheme {
   return agentThemes.default;
 }
 
+export function useAgentTheme(agent?: string | null): AgentTheme {
+  return agentThemeFor(agent);
+}
+
 export function statusToneFor(status?: string | null): "neutral" | "success" | "warning" | "danger" | "info" {
   const normalized = (status ?? "").toUpperCase();
   if (normalized.includes("COMPLETED") || normalized.includes("APPROVED") || normalized.includes("ACTIVE") || normalized.includes("EXECUTED")) return "success";

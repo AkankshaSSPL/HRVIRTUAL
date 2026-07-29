@@ -2,8 +2,8 @@ from datetime import date, datetime
 from enum import StrEnum
 import uuid
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -15,6 +15,7 @@ class PayrollRunStatus(StrEnum):
     APPROVED = "APPROVED"
     BANK_SHEET_GENERATED = "BANK_SHEET_GENERATED"
     COMPLETED = "COMPLETED"
+    REJECTED = "REJECTED"
 
 
 class SalaryAssignmentStatus(StrEnum):
@@ -75,6 +76,9 @@ class PayrollRunItem(BaseModel):
     net_salary: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     bank_account_number: Mapped[str] = mapped_column(String(80), nullable=False)
     ifsc_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    # Full component-level breakdown for this employee's payroll line — see
+    # payroll_computation.py for the FULL_TIME / CONSULTANT shape of this dict.
+    breakdown_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     payroll_run: Mapped[PayrollRun] = relationship(back_populates="items")
     employee: Mapped["Employee"] = relationship(back_populates="payroll_items")
@@ -184,3 +188,74 @@ class SalaryAssignmentApproval(BaseModel):
     comments: Mapped[str | None] = mapped_column(Text)
 
     assignment: Mapped[EmployeeSalaryAssignment] = relationship(back_populates="approvals")
+
+
+# ── Payroll Masters (new) ─────────────────────────────────────────────────────
+
+class PayrollConfig(BaseModel):
+    """Statutory payroll rates — EPF, PT slabs, consultant TDS. Never hardcode
+    these values anywhere else; always read through PayrollConfigService."""
+    __tablename__ = "payroll_configs"
+    __table_args__ = (
+        Index("ix_payroll_configs_active", "active"),
+        Index("ix_payroll_configs_deleted_at", "deleted_at"),
+    )
+
+    epf_wage_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=15000)
+    epf_employee_rate: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False, default=0.1200)
+    epf_employer_rate: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False, default=0.1361)
+
+    # Maharashtra PT slabs as JSON list:
+    # [{"min": 0, "max": 7499, "amount": 0},
+    #  {"min": 7500, "max": 9999, "amount": 175},
+    #  {"min": 10000, "max": null, "amount": 200}]
+    professional_tax_slabs: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+
+    consultant_tds_rate: Mapped[float] = mapped_column(Numeric(6, 4), nullable=False, default=0.1000)
+    consultant_base_working_days: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    employee_base_working_days: Mapped[int] = mapped_column(Integer, nullable=False, default=26)
+
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CompanySettings(BaseModel):
+    """Company identity/banking details used to populate exported payroll sheets."""
+    __tablename__ = "company_settings"
+    __table_args__ = (
+        Index("ix_company_settings_active", "active"),
+        Index("ix_company_settings_deleted_at", "deleted_at"),
+    )
+
+    company_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    company_pan: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    company_tan: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    gstin: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    payroll_bank_account: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    payroll_bank_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payroll_bank_ifsc: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class EmployeeTDSConfig(BaseModel):
+    """Per-employee monthly TDS as provided by the company CA for a given
+    financial year. If no row exists for (employee, financial_year), payroll
+    computation treats TDS as 0 — HR must add this manually when the CA
+    provides workings; it is never auto-calculated."""
+    __tablename__ = "employee_tds_configs"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "financial_year", "effective_from", name="uq_employee_tds_config"),
+        Index("ix_employee_tds_configs_employee_fy", "employee_id", "financial_year"),
+    )
+
+    employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    financial_year: Mapped[str] = mapped_column(String(10), nullable=False)  # e.g. "2026-27"
+    monthly_tds: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    annual_tax_liability: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    tax_regime: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "NEW" | "OLD"
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    employee: Mapped["Employee"] = relationship()

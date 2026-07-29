@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { DrawerPanel } from "@/components/ui-system";
 import { getEmployee, getEmployeeFormOptions, updateEmployee, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
+import { getEmployeeTDSConfigs } from "@/services/payroll";
+import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
 
@@ -23,12 +25,18 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   const [form, setForm] = useState<Partial<EmployeeCreatePayload>>(emptyForm);
   const [currentSalary, setCurrentSalary] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("personal");
+  const [tdsModalOpen, setTdsModalOpen] = useState(false);
   const employeeQuery = useQuery({ queryKey: ["employee-detail", employeeId], queryFn: () => getEmployee(employeeId!), enabled: Boolean(open && employeeId) });
   const optionsQuery = useQuery({ queryKey: ["employee-form-options"], queryFn: getEmployeeFormOptions, enabled: open });
   const lookupsQuery = useQuery({
     queryKey: ["lookups", "employee-form"],
     queryFn: () => getLookups(["employment_type", "employment_status", "gender"]),
     enabled: open,
+  });
+  const tdsConfigsQuery = useQuery({
+    queryKey: ["employee-tds-config", employeeId],
+    queryFn: () => getEmployeeTDSConfigs(employeeId!),
+    enabled: Boolean(open && employeeId),
   });
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<EmployeeCreatePayload>) => updateEmployee(employeeId!, payload),
@@ -117,15 +125,46 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             <Field label="UAN number"><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
           </div>
 
-          <div className={activeTab === "payroll" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="Current salary">
-              <Input
-                type="number"
-                min="0"
-                value={currentSalary}
-                onChange={(event) => setCurrentSalary(event.target.value)}
-              />
-            </Field>
+          <div className={activeTab === "payroll" ? "space-y-5" : "hidden"}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Current salary">
+                <Input
+                  type="number"
+                  min="0"
+                  value={currentSalary}
+                  onChange={(event) => setCurrentSalary(event.target.value)}
+                />
+              </Field>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">TDS Configuration</span>
+                <Button size="sm" variant="outline" onClick={() => setTdsModalOpen(true)}>
+                  Add / Update TDS
+                </Button>
+              </div>
+              {tdsConfigsQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading TDS configuration...</p>
+              ) : tdsConfigsQuery.data && tdsConfigsQuery.data.length > 0 ? (
+                <div className="space-y-2">
+                  {tdsConfigsQuery.data.map((config) => (
+                    <div key={config.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                      <div>
+                        <span className="font-medium">{config.financial_year}</span>
+                        <span className="ml-2 text-muted-foreground">
+                          ₹{config.monthly_tds.toLocaleString("en-IN")}/month
+                          {config.tax_regime ? ` · ${config.tax_regime === "NEW" ? "New Regime" : "Old Regime"}` : ""}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">from {config.effective_from}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No TDS configuration on file yet.</p>
+              )}
+            </div>
           </div>
 
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Employee update could not be saved.</p> : null}
@@ -136,6 +175,18 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             </Button>
           </div>
         </div>
+      ) : null}
+
+      {employeeId && employeeQuery.data ? (
+        <EmployeeTDSModal
+          open={tdsModalOpen}
+          employeeId={employeeId}
+          employeeName={`${employeeQuery.data.first_name ?? ""} ${employeeQuery.data.last_name ?? ""}`.trim() || employeeQuery.data.employee_code || "Employee"}
+          onClose={() => {
+            setTdsModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["employee-tds-config", employeeId] });
+          }}
+        />
       ) : null}
     </DrawerPanel>
   );

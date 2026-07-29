@@ -6,6 +6,8 @@ import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DataTable, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
+import { PayrollConfigPanel } from "@/components/payroll/PayrollConfigPanel";
+import { CompanySettingsPanel } from "@/components/payroll/CompanySettingsPanel";
 import {
   createSalaryComponent,
   deleteSalaryComponent,
@@ -16,6 +18,12 @@ import {
   type SalaryStructureRecord,
 } from "@/services/payroll";
 import { getLookups } from "@/services/lookups";
+
+// NOTE: Payroll run generation/export/approval has no REST API — it's a
+// chat-only PayrollAgent action ("process" / "export" / "submit_approval").
+// PayrollRunCard and PayrollExportDownload render inside Agent Command, not
+// here. See the note above the (removed) run-related imports in this diff
+// if you're comparing against an earlier version of this file.
 
 type SalaryComponentForm = {
   name: string;
@@ -225,6 +233,7 @@ export function PayrollPage() {
           }
         />
 
+
         {componentsQuery.isLoading ? (
           <SectionCard>
             <LoadingSkeleton rows={6} />
@@ -380,6 +389,9 @@ export function PayrollPage() {
             />
           </SectionCard>
         ) : null}
+
+        <PayrollConfigPanel />
+        <CompanySettingsPanel />
 
         {formError && !formOpen ? <div className="fixed bottom-6 right-6 z-50"><ToastNotification title="Salary component action failed" description={formError} type="error" /></div> : null}
         <ConfirmDialog
