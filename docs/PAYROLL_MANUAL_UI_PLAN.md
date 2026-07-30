@@ -18,7 +18,7 @@
 | `PayrollExportDownload` component | ✅ Done | `frontend/src/components/payroll/PayrollExportDownload.tsx` |
 | Salary masters CRUD (components/structures) | ✅ Done | 16 existing routes |
 | TriageAgent + SessionManager | ✅ Done | Akanksha pushed — NL routing redesign complete |
-| `openpyxl` in `requirements.txt` | ❌ Missing | Installed manually, not committed |
+| `openpyxl` in `requirements.txt` | ✅ Done | Added to `backend/requirements.txt` line 17 |
 | Migration `20260801_0036` | ❌ Missing | Adds `metadata_json` column to `payroll_runs` table |
 | 4 REST endpoints for payroll runs | ❌ Missing | GET /runs, POST /runs, submit-approval, export |
 | `payroll.ts` — 4 API functions | ❌ Missing | Replace dead comment block at end of file |
@@ -412,19 +412,11 @@ async function handleExport(runId: string, type: "employee" | "consultant" | "ba
 
 ## Remaining Work (Ordered)
 
-### 0. Add `openpyxl` to `requirements.txt`
-
-**File:** `backend/requirements.txt`
-
-`openpyxl` was installed manually for export sheet generation but never committed. Add the pinned version line (whatever `pip show openpyxl` returns).
-
----
-
 ## Files to Change
 
 ```
 MODIFIED BACKEND:
-  backend/requirements.txt                          (+openpyxl pinned version)
+  backend/requirements.txt                          (DONE — openpyxl already added)
   backend/app/models/payroll/models.py              (DONE — metadata_json already added)
   backend/app/api/v1/endpoints/payroll.py           (+imports, +schemas, +2 helpers, +4 endpoints)
 
