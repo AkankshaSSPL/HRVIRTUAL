@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,3 +59,30 @@ class AgentStep(BaseModel):
 
     agent_run: Mapped[AgentRun] = relationship(back_populates="steps")
 
+
+class ConversationSession(BaseModel):
+    __tablename__ = "conversation_sessions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    active_agent: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    active_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    active_entity_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    messages: Mapped[list["ConversationMessage"]] = relationship(
+        "ConversationMessage", back_populates="session",
+        cascade="all, delete-orphan", order_by="ConversationMessage.created_at",
+    )
+
+
+class ConversationMessage(BaseModel):
+    __tablename__ = "conversation_messages"
+
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("conversation_sessions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    agent_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    session: Mapped["ConversationSession"] = relationship("ConversationSession", back_populates="messages")

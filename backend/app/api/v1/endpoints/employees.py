@@ -52,20 +52,25 @@ class EmployeeCreateRequest(BaseModel):
     employment_status: str = "ACTIVE"
     employment_type: str = "FULL_TIME"
     department_id: UUID | None = None
-    designation_id: UUID | None = None
+    designation_id: UUID
     reporting_manager_id: UUID | None = None
     official_email: EmailStr | None = None
     personal_email: EmailStr
-    phone: str | None = None
-    dob: date | None = None
-    gender: str | None = None
-    bank_account_number: str | None = None
-    ifsc_code: str | None = None
+    phone: str
+    dob: date
+    gender: str
+    address: str
+    zip_code: str
+    city: str
+    bank_account_number: str
+    ifsc_code: str
+    bank_branch: str
     pan_number: str | None = None
     aadhaar_number: str | None = None
     uan_number: str | None = None
     current_salary: Decimal | None = None
-    emergency_contact: dict[str, Any] | None = None
+    emergency_contact: dict[str, Any]
+    emergency_code: str | None = None
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -83,12 +88,18 @@ class EmployeeUpdateRequest(BaseModel):
     phone: str | None = None
     dob: date | None = None
     gender: str | None = None
+    address: str | None = None
+    zip_code: str | None = None
+    city: str | None = None
     bank_account_number: str | None = None
     ifsc_code: str | None = None
+    bank_branch: str | None = None
     pan_number: str | None = None
     aadhaar_number: str | None = None
     uan_number: str | None = None
     current_salary: Decimal | None = None
+    emergency_contact: dict[str, Any] | None = None
+    emergency_code: str | None = None
     seat_label: str | None = None
 
 

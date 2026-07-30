@@ -28,9 +28,20 @@ def compute_onboarding_progress(db: Session, employee: Employee) -> dict[str, An
     """7-step onboarding checklist: personal, employment, payroll readiness,
     salary, documents, seating, and welcome mail dispatch."""
 
-    personal_complete = bool(employee.first_name and employee.last_name and employee.personal_email)
-    employment_complete = bool(employee.department_id and employee.designation_id and employee.reporting_manager_id)
-    payroll_complete = bool(employee.bank_account_number and employee.ifsc_code and employee.pan_number)
+    personal_complete = bool(
+        employee.first_name
+        and employee.last_name
+        and employee.personal_email
+        and employee.phone
+        and employee.dob
+        and employee.gender
+        and employee.address
+        and employee.zip_code
+        and employee.city
+        and (employee.emergency_code or employee.emergency_contact)
+    )
+    employment_complete = bool(employee.joining_date and employee.designation_id)
+    payroll_complete = bool(employee.bank_account_number and employee.ifsc_code and employee.bank_branch)
     salary_complete = employee.current_salary is not None
     documents_complete = _has_verified_document(db, employee.id)
     seating_complete = bool(employee.seat_label)

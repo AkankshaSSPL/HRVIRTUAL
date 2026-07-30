@@ -67,8 +67,13 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
       phone: employee.phone ?? "",
       dob: employee.dob ?? "",
       gender: employee.gender ?? "",
+      address: employee.address ?? "",
+      zip_code: employee.zip_code ?? "",
+      city: employee.city ?? "",
       bank_account_number: employee.bank_account_number ?? "",
       ifsc_code: employee.ifsc_code ?? "",
+      bank_branch: employee.bank_branch ?? "",
+      emergency_code: employee.emergency_code ?? "",
       pan_number: employee.pan_number ?? "",
       aadhaar_number: employee.aadhaar_number ?? "",
       uan_number: employee.uan_number ?? "",
@@ -98,28 +103,33 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
           <div className={activeTab === "personal" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="First name"><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
-            <Field label="Last name"><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
+            <Field label="First name" required><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
+            <Field label="Last name" required><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
             <Field label="Official email"><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
-            <Field label="Personal email"><Input type="email" value={form.personal_email ?? ""} onChange={(event) => setValue("personal_email", event.target.value)} /></Field>
-            <Field label="Phone"><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
-            <Field label="Date of birth"><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
-            <Field label="Gender"><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
+            <Field label="Personal email" required><Input type="email" value={form.personal_email ?? ""} onChange={(event) => setValue("personal_email", event.target.value)} /></Field>
+            <Field label="Phone" required><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
+            <Field label="Date of birth" required><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
+            <Field label="Gender" required><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
+            <Field label="Address" required><Input value={form.address ?? ""} onChange={(event) => setValue("address", event.target.value)} /></Field>
+            <Field label="City" required><Input value={form.city ?? ""} onChange={(event) => setValue("city", event.target.value)} /></Field>
+            <Field label="Zip code" required><Input value={form.zip_code ?? ""} onChange={(event) => setValue("zip_code", event.target.value)} /></Field>
+            <Field label="Emergency code" required><Input value={form.emergency_code ?? ""} onChange={(event) => setValue("emergency_code", event.target.value)} /></Field>
           </div>
 
           <div className={activeTab === "employment" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="Employee code"><Input value={form.employee_code ?? ""} onChange={(event) => setValue("employee_code", event.target.value)} /></Field>
-            <Field label="Joining date"><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
+            <Field label="Joining date" required><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
             <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} /></Field>
             <Field label="Status"><Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} /></Field>
             <Field label="Department"><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
-            <Field label="Designation"><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
+            <Field label="Designation" required><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
             <Field label="Reporting manager"><Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).filter((item) => item.id !== employeeId).map((item) => [item.id, item.name])]} /></Field>
           </div>
 
           <div className={activeTab === "bank" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="Bank account number"><Input value={form.bank_account_number ?? ""} onChange={(event) => setValue("bank_account_number", event.target.value)} /></Field>
-            <Field label="IFSC code"><Input value={form.ifsc_code ?? ""} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} /></Field>
+            <Field label="Bank account number" required><Input value={form.bank_account_number ?? ""} onChange={(event) => setValue("bank_account_number", event.target.value)} /></Field>
+            <Field label="IFSC code" required><Input value={form.ifsc_code ?? ""} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} /></Field>
+            <Field label="Bank branch" required><Input value={form.bank_branch ?? ""} onChange={(event) => setValue("bank_branch", event.target.value)} /></Field>
             <Field label="PAN number"><Input value={form.pan_number ?? ""} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} /></Field>
             <Field label="Aadhaar number"><Input value={form.aadhaar_number ?? ""} onChange={(event) => setValue("aadhaar_number", event.target.value)} /></Field>
             <Field label="UAN number"><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
@@ -224,8 +234,16 @@ function TabBar({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="space-y-1.5 text-sm"><span className="font-medium">{label}</span>{children}</label>;
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="space-y-1.5 text-sm">
+      <span className="font-medium">
+        {label}
+        {required ? <span className="ml-1 text-rose-500 font-bold">*</span> : null}
+      </span>
+      {children}
+    </label>
+  );
 }
 
 function Select({ value, onChange, options }: { value?: string | null; onChange: (value: string) => void; options: string[][] }) {

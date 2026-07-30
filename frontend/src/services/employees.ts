@@ -25,6 +25,12 @@ export type EmployeeRecord = {
   pan_number?: string | null;
   aadhaar_number?: string | null;
   uan_number?: string | null;
+  address?: string | null;
+  zip_code?: string | null;
+  city?: string | null;
+  bank_branch?: string | null;
+  emergency_code?: string | null;
+  emergency_contact?: Record<string, unknown> | null;
   department_id?: string | null;
   designation_id?: string | null;
   reporting_manager_id?: string | null;
@@ -46,20 +52,25 @@ export type EmployeeCreatePayload = {
   employment_status: string;
   employment_type: string;
   department_id?: string;
-  designation_id?: string;
+  designation_id: string;
   reporting_manager_id?: string;
   official_email?: string;
   personal_email: string;
-  phone?: string;
-  dob?: string;
-  gender?: string;
-  bank_account_number?: string;
-  ifsc_code?: string;
+  phone: string;
+  dob: string;
+  gender: string;
+  address: string;
+  zip_code: string;
+  city: string;
+  bank_account_number: string;
+  ifsc_code: string;
+  bank_branch: string;
   pan_number?: string;
   aadhaar_number?: string;
   uan_number?: string;
   current_salary?: number;
-  emergency_contact?: Record<string, unknown>;
+  emergency_contact: Record<string, unknown>;
+  emergency_code?: string;
 };
 
 export type EmployeeListResponse = {

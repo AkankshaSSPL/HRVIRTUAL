@@ -15,7 +15,8 @@ DOCUMENT_CHECKLIST = [
     {"name": "PAN", "status": "PENDING"},
     {"name": "Aadhaar", "status": "PENDING"},
     {"name": "Bank details", "status": "PENDING"},
-    {"name": "Educational documents", "status": "PENDING"},
+    {"name": "Education Certificate", "status": "PENDING"},
+    {"name": "Address Proof", "status": "PENDING"},
     {"name": "Experience letters", "status": "PENDING"},
 ]
 

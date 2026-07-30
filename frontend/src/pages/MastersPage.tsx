@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DrawerPanel, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge } from "@/components/ui-system";
+import { CompanySettingsPanel } from "@/components/payroll/CompanySettingsPanel";
 import { createMaster, deleteMaster, getMasters, updateMaster, type MasterRecord } from "@/services/masters";
 
 type MasterDefinition = {
@@ -18,6 +20,7 @@ type MasterDefinition = {
 const groups = [
   { key: "organization", label: "Organization", icon: Building2 },
   { key: "attendance_leave", label: "Attendance & Leave", icon: Settings2 },
+  { key: "company_settings", label: "Company Settings", icon: Building2 },
 ];
 
 const fixedDefinitions: MasterDefinition[] = [
@@ -41,7 +44,21 @@ const emptyForm: Partial<MasterRecord> = { name: "", code: "", description: "", 
 
 export function MastersPage() {
   const queryClient = useQueryClient();
-  const [group, setGroup] = useState("organization");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const groupParam = searchParams.get("group");
+  const [group, setGroup] = useState(groupParam || "organization");
+
+  useEffect(() => {
+    if (groupParam && groupParam !== group) {
+      setGroup(groupParam);
+    }
+  }, [groupParam]);
+
+  function handleGroupSelect(newGroup: string) {
+    setGroup(newGroup);
+    setSearchParams({ group: newGroup });
+  }
+
   const [selectedDefinition, setSelectedDefinition] = useState<MasterDefinition | null>(null);
   const [editing, setEditing] = useState<MasterRecord | null>(null);
   const [deleting, setDeleting] = useState<{ definition: MasterDefinition; record: MasterRecord } | null>(null);
@@ -113,41 +130,47 @@ export function MastersPage() {
         <PageHeader title="Masters" description="Organization structure and reusable HRMS master data." />
         <div className="flex flex-wrap gap-2 border-b pb-3">
           {groups.map(({ key, label, icon: Icon }) => (
-            <Button key={key} variant={group === key ? "default" : "ghost"} onClick={() => setGroup(key)}><Icon className="h-4 w-4" />{label}</Button>
+            <Button key={key} variant={group === key ? "default" : "ghost"} onClick={() => handleGroupSelect(key)}><Icon className="h-4 w-4" />{label}</Button>
           ))}
         </div>
-        {mastersQuery.isLoading ? <LoadingSkeleton rows={7} /> : null}
-        <div className="grid gap-4 xl:grid-cols-2">
-          {visibleDefinitions.map((definition) => {
-            const records = recordsFor(definition);
-            return (
-              <SectionCard
-                key={definition.key}
-                title={definition.title}
-                description={definition.description}
-                action={<Button size="sm" onClick={() => openEditor(definition)}><Plus className="h-4 w-4" />Add</Button>}
-              >
-                {!records.length ? <EmptyState title={`No ${definition.title.toLowerCase()}`} description="Create the first master record for this category." /> : (
-                  <div className="divide-y rounded-md border">
-                    {records.map((record) => (
-                      <div key={record.id} className="flex items-center justify-between gap-3 px-3 py-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{record.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{record.code || record.description || record.category || "No additional details"}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <StatusBadge status={record.active ? "Active" : "Inactive"} tone={record.active ? "success" : "neutral"} />
-                          <Button size="icon" variant="ghost" aria-label="Edit master" onClick={() => openEditor(definition, record)}><Pencil className="h-4 w-4" /></Button>
-                          <Button size="icon" variant="ghost" aria-label="Delete master" onClick={() => setDeleting({ definition, record })}><Trash2 className="h-4 w-4 text-rose-600" /></Button>
-                        </div>
+        {group === "company_settings" ? (
+          <CompanySettingsPanel />
+        ) : (
+          <>
+            {mastersQuery.isLoading ? <LoadingSkeleton rows={7} /> : null}
+            <div className="grid gap-4 xl:grid-cols-2">
+              {visibleDefinitions.map((definition) => {
+                const records = recordsFor(definition);
+                return (
+                  <SectionCard
+                    key={definition.key}
+                    title={definition.title}
+                    description={definition.description}
+                    action={<Button size="sm" onClick={() => openEditor(definition)}><Plus className="h-4 w-4" />Add</Button>}
+                  >
+                    {!records.length ? <EmptyState title={`No ${definition.title.toLowerCase()}`} description="Create the first master record for this category." /> : (
+                      <div className="divide-y rounded-md border">
+                        {records.map((record) => (
+                          <div key={record.id} className="flex items-center justify-between gap-3 px-3 py-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{record.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">{record.code || record.description || record.category || "No additional details"}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <StatusBadge status={record.active ? "Active" : "Inactive"} tone={record.active ? "success" : "neutral"} />
+                              <Button size="icon" variant="ghost" aria-label="Edit master" onClick={() => openEditor(definition, record)}><Pencil className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" aria-label="Delete master" onClick={() => setDeleting({ definition, record })}><Trash2 className="h-4 w-4 text-rose-600" /></Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </SectionCard>
-            );
-          })}
-        </div>
+                    )}
+                  </SectionCard>
+                );
+              })}
+            </div>
+          </>
+        )}
         <MasterEditor definition={selectedDefinition} editing={editing} form={form} setForm={setForm} leaveCategories={workspace?.lookups.leave_category ?? []} onClose={closeEditor} onSave={() => saveMutation.mutate()} saving={saveMutation.isPending} error={saveMutation.isError} />
         <ConfirmDialog open={Boolean(deleting)} title="Delete master record?" description={`${deleting?.record.name ?? "This record"} will stop appearing in dropdowns. Existing historical records remain unchanged.`} confirmLabel={deleteMutation.isPending ? "Deleting..." : "Delete"} onCancel={() => setDeleting(null)} onConfirm={() => deleteMutation.mutate()} />
       </PageContainer>

@@ -5,7 +5,22 @@ from datetime import date, timedelta
 from typing import Any
 
 
-ONBOARDING_REQUIRED_FIELDS = ["name", "joining_date", "manager", "email"]
+ONBOARDING_REQUIRED_FIELDS = [
+    "name",
+    "joining_date",
+    "email",
+    "phone",
+    "dob",
+    "gender",
+    "designation",
+    "address",
+    "zip_code",
+    "city",
+    "bank_account_number",
+    "ifsc_code",
+    "bank_branch",
+    "emergency_code",
+]
 
 
 def extract_onboarding_entities(text: str) -> dict[str, Any]:
@@ -33,6 +48,11 @@ def extract_onboarding_entities(text: str) -> dict[str, Any]:
         "uan_number": _uan_number(normalized),
         "dob": _dob(normalized),
         "gender": _gender(normalized),
+        "address": _address(normalized),
+        "zip_code": _zip_code(normalized),
+        "city": _city(normalized),
+        "bank_branch": _bank_branch(normalized),
+        "emergency_code": _emergency_code(normalized),
         "seat": _seat(normalized),
         "resume_uploaded": False,
     }
@@ -317,13 +337,39 @@ def _seat(text: str) -> str | None:
     return match.group(0).upper() if match else None
 
 
+def _address(text: str) -> str | None:
+    return _labeled_value(text, ("address", "street address", "residence"))
+
+
+def _zip_code(text: str) -> str | None:
+    labeled = _labeled_value(text, ("zip code", "zip", "pincode", "pin code", "postal code"))
+    if labeled:
+        match = re.search(r"\b\d{5,6}\b", labeled)
+        return match.group(0) if match else labeled.strip()
+    match = re.search(r"\b\d{5,6}\b", text)
+    return match.group(0) if match else None
+
+
+def _city(text: str) -> str | None:
+    return _labeled_value(text, ("city", "town", "location"))
+
+
+def _bank_branch(text: str) -> str | None:
+    return _labeled_value(text, ("bank branch", "branch"))
+
+
+def _emergency_code(text: str) -> str | None:
+    return _labeled_value(text, ("emergency code", "emergency contact code", "emergency phone", "emergency contact"))
+
+
 def _labeled_value(text: str, labels: tuple[str, ...]) -> str | None:
     label_pattern = "|".join(re.escape(label) for label in sorted(labels, key=len, reverse=True))
     stop_labels = (
         "name|designation|desig|role|title|department|dept|manager|reporting manager|reports to|under|"
         "salary|salary structure|structure|ctc|pay|employee type|employment type|type|location|work location|based in|joining|experience|email|phone|shift|work shift|"
-        "bank account number|bank account|account number|a/c number|a/c|bank|ifsc code|ifsc|pan number|pan|"
-        "aadhaar number|aadhaar|aadhar number|aadhar|uan number|uan|date of birth|dob|gender|seat label|seat"
+        "bank account number|bank account|account number|a/c number|a/c|bank|ifsc code|ifsc|bank branch|branch|pan number|pan|"
+        "aadhaar number|aadhaar|aadhar number|aadhar|uan number|uan|date of birth|dob|gender|seat label|seat|"
+        "address|zip code|zip|pincode|pin code|postal code|city|town|emergency code|emergency contact code|emergency phone|emergency contact"
     )
     match = re.search(
         rf"\b(?:{label_pattern})\b\s*(?::|-|=)?\s*(?:is\s+)?(.+?)(?=\s*,\s*(?:his\s+|her\s+)?(?:{stop_labels})\b|\s+(?:his\s+|her\s+)?(?:{stop_labels})\s*(?:is|:|-|=)|[.!?]|$)",

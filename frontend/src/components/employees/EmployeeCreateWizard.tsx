@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Landmark, ShieldAlert, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Landmark, MapPin, ShieldAlert, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { createEmployee, getEmployeeFormOptions, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
 
-const initialForm: EmployeeCreatePayload = {
+const initialForm = {
   first_name: "",
   last_name: "",
   employee_code: "",
@@ -24,8 +24,12 @@ const initialForm: EmployeeCreatePayload = {
   phone: "",
   dob: "",
   gender: "",
+  address: "",
+  zip_code: "",
+  city: "",
   bank_account_number: "",
   ifsc_code: "",
+  bank_branch: "",
   pan_number: "",
   aadhaar_number: "",
   uan_number: "",
@@ -35,11 +39,13 @@ const initialEmergencyContact = {
   name: "",
   relationship: "",
   phone: "",
+  emergency_code: "",
 };
 
 const steps = [
   { label: "Basic", icon: UserRound },
   { label: "Employment", icon: Building2 },
+  { label: "Address & Location", icon: MapPin },
   { label: "Emergency Contact", icon: ShieldAlert },
   { label: "Banking", icon: Landmark },
 ];
@@ -53,7 +59,7 @@ function isValidEmail(value: string): boolean {
 type StepErrors = Record<string, string>;
 type EmergencyContactForm = typeof initialEmergencyContact;
 
-function validateStep0(form: EmployeeCreatePayload): StepErrors {
+function validateStep0(form: typeof initialForm): StepErrors {
   const errors: StepErrors = {};
   if (!form.first_name.trim()) {
     errors.first_name = "First name is required";
@@ -69,13 +75,70 @@ function validateStep0(form: EmployeeCreatePayload): StepErrors {
   if (form.official_email && form.official_email.trim() && !isValidEmail(form.official_email)) {
     errors.official_email = "Enter a valid email address";
   }
+  if (!form.phone?.trim()) {
+    errors.phone = "Phone number is required";
+  }
+  if (!form.dob?.trim()) {
+    errors.dob = "Date of birth is required";
+  }
+  if (!form.gender?.trim()) {
+    errors.gender = "Gender is required";
+  }
   return errors;
 }
 
-function validateStep1(form: EmployeeCreatePayload): StepErrors {
+function validateStep1(form: typeof initialForm): StepErrors {
   const errors: StepErrors = {};
   if (!form.joining_date) {
     errors.joining_date = "Joining date is required";
+  }
+  if (!form.designation_id?.trim()) {
+    errors.designation_id = "Designation is required";
+  }
+  return errors;
+}
+
+function validateStep2(form: typeof initialForm): StepErrors {
+  const errors: StepErrors = {};
+  if (!form.address?.trim()) {
+    errors.address = "Address is required";
+  }
+  if (!form.city?.trim()) {
+    errors.city = "City is required";
+  }
+  if (!form.zip_code?.trim()) {
+    errors.zip_code = "Zip code is required";
+  }
+  return errors;
+}
+
+function validateStep3(emergencyContact: EmergencyContactForm): StepErrors {
+  const errors: StepErrors = {};
+  if (!emergencyContact.name.trim()) {
+    errors.name = "Name is required";
+  }
+  if (!emergencyContact.relationship.trim()) {
+    errors.relationship = "Relationship is required";
+  }
+  if (!emergencyContact.phone.trim()) {
+    errors.phone = "Phone number is required";
+  }
+  if (!emergencyContact.emergency_code.trim()) {
+    errors.emergency_code = "Emergency code is required";
+  }
+  return errors;
+}
+
+function validateStep4(form: typeof initialForm): StepErrors {
+  const errors: StepErrors = {};
+  if (!form.bank_account_number?.trim()) {
+    errors.bank_account_number = "Bank account number is required";
+  }
+  if (!form.ifsc_code?.trim()) {
+    errors.ifsc_code = "IFSC code is required";
+  }
+  if (!form.bank_branch?.trim()) {
+    errors.bank_branch = "Bank branch is required";
   }
   return errors;
 }
@@ -106,7 +169,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
     },
   });
 
-  function setValue(key: keyof EmployeeCreatePayload, value: string) {
+  function setValue(key: keyof typeof initialForm, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -116,29 +179,38 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
 
   const step0Errors = validateStep0(form);
   const step1Errors = validateStep1(form);
-  const allErrors = { ...step0Errors, ...step1Errors };
+  const step2Errors = validateStep2(form);
+  const step3Errors = validateStep3(emergencyContact);
+  const step4Errors = validateStep4(form);
+  const allErrors = { ...step0Errors, ...step1Errors, ...step2Errors, ...step3Errors, ...step4Errors };
 
-  const canContinue = step === 0 ? Object.keys(step0Errors).length === 0 : step === 1 ? Object.keys(step1Errors).length === 0 : true;
+  const canContinue =
+    step === 0 ? Object.keys(step0Errors).length === 0 :
+    step === 1 ? Object.keys(step1Errors).length === 0 :
+    step === 2 ? Object.keys(step2Errors).length === 0 :
+    step === 3 ? Object.keys(step3Errors).length === 0 :
+    true;
   const canSubmit = Object.keys(allErrors).length === 0;
 
-  const bankingReady = Boolean(form.bank_account_number && form.ifsc_code);
+  const bankingReady = Boolean(form.bank_account_number && form.ifsc_code && form.bank_branch);
 
   function buildPayload(): EmployeeCreatePayload {
     const sanitizedBase = Object.fromEntries(
       Object.entries(form).map(([key, value]) => [key, value === "" ? undefined : value]),
-    ) as EmployeeCreatePayload;
+    ) as unknown as EmployeeCreatePayload;
 
     const trimmedEmergencyContact = {
       name: emergencyContact.name.trim(),
       relationship: emergencyContact.relationship.trim(),
       phone: emergencyContact.phone.trim(),
+      code: emergencyContact.emergency_code.trim(),
     };
-    const hasEmergencyContact = Object.values(trimmedEmergencyContact).some(Boolean);
 
     return {
       ...sanitizedBase,
       current_salary: currentSalary.trim() ? Number(currentSalary) : undefined,
-      emergency_contact: hasEmergencyContact ? trimmedEmergencyContact : undefined,
+      emergency_contact: trimmedEmergencyContact,
+      emergency_code: emergencyContact.emergency_code.trim(),
     };
   }
 
@@ -160,9 +232,9 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
   }
 
   return (
-        <DrawerPanel open={open} title="Create Employee" size="2xl" onClose={onClose}>
-        <div className="space-y-5">
-        <div className="grid grid-cols-4 gap-2">
+    <DrawerPanel open={open} title="Create Employee" size="2xl" onClose={onClose}>
+      <div className="space-y-5">
+        <div className="grid grid-cols-5 gap-2">
           {steps.map(({ label, icon: Icon }, index) => (
             <div key={label} className={cn("rounded-md border px-2 py-3 text-center", index === step ? "border-primary bg-primary/5 text-primary" : index < step ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "text-muted-foreground")}>
               <Icon className="mx-auto h-4 w-4" />
@@ -173,7 +245,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
 
         {step === 0 ? (
           <div className="space-y-4">
-            <WizardHeading title="Basic Information" description="Identity, contact information, and the auto-generated employee ID." />
+            <WizardHeading title="Basic Information" description="Identity, contact information, and personal details." />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="First name" required error={showErrors ? step0Errors.first_name : undefined}>
                 <Input value={form.first_name} onChange={(event) => setValue("first_name", event.target.value)} placeholder="e.g. John" />
@@ -190,9 +262,15 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               <Field label="Personal email" required error={showErrors ? step0Errors.personal_email : undefined}>
                 <Input type="email" value={form.personal_email} onChange={(event) => setValue("personal_email", event.target.value)} placeholder="e.g. john@example.com" />
               </Field>
-              <Field label="Phone number"><Input value={form.phone} onChange={(event) => setValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" /></Field>
-              <Field label="Date of birth"><Input type="date" value={form.dob} onChange={(event) => setValue("dob", event.target.value)} /></Field>
-              <Field label="Gender"><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
+              <Field label="Phone number" required error={showErrors ? step0Errors.phone : undefined}>
+                <Input value={form.phone} onChange={(event) => setValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" />
+              </Field>
+              <Field label="Date of birth" required error={showErrors ? step0Errors.dob : undefined}>
+                <Input type="date" value={form.dob} onChange={(event) => setValue("dob", event.target.value)} />
+              </Field>
+              <Field label="Gender" required error={showErrors ? step0Errors.gender : undefined}>
+                <Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} />
+              </Field>
             </div>
           </div>
         ) : null}
@@ -201,39 +279,92 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
           <div className="space-y-4">
             <WizardHeading title="Employment Details" description="Position, reporting line, and joining information." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Department"><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
-              <Field label="Designation"><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
-              <Field label="Reporting manager"><Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).map((item) => [item.id, item.name])]} /></Field>
+              <Field label="Department">
+                <Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} />
+              </Field>
+              <Field label="Designation" required error={showErrors ? step1Errors.designation_id : undefined}>
+                <Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} />
+              </Field>
+              <Field label="Reporting manager">
+                <Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).map((item) => [item.id, item.name])]} />
+              </Field>
               <Field label="Date of joining" required error={showErrors ? step1Errors.joining_date : undefined}>
                 <Input type="date" value={form.joining_date} onChange={(event) => setValue("joining_date", event.target.value)} />
               </Field>
-              <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} /></Field>
-              <Field label="Employee status"><Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} /></Field>
+              <Field label="Employment type">
+                <Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} />
+              </Field>
+              <Field label="Employee status">
+                <Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} />
+              </Field>
             </div>
           </div>
         ) : null}
 
         {step === 2 ? (
           <div className="space-y-4">
-            <WizardHeading title="Emergency Contact" description="Who to reach in case of an emergency. Optional, but recommended." />
+            <WizardHeading title="Address & Location" description="Residential address, city, and zip code details." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Name"><Input value={emergencyContact.name} onChange={(event) => setEmergencyContactValue("name", event.target.value)} placeholder="e.g. Jane Doe" /></Field>
-              <Field label="Relationship"><Input value={emergencyContact.relationship} onChange={(event) => setEmergencyContactValue("relationship", event.target.value)} placeholder="e.g. Spouse, Parent, Sibling" /></Field>
-              <Field label="Phone number"><Input value={emergencyContact.phone} onChange={(event) => setEmergencyContactValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" /></Field>
+              <div className="sm:col-span-2">
+                <Field label="Address" required error={showErrors ? step2Errors.address : undefined}>
+                  <Input value={form.address} onChange={(event) => setValue("address", event.target.value)} placeholder="e.g. 123 Main Street, Apt 4B" />
+                </Field>
+              </div>
+              <Field label="City" required error={showErrors ? step2Errors.city : undefined}>
+                <Input value={form.city} onChange={(event) => setValue("city", event.target.value)} placeholder="e.g. San Francisco" />
+              </Field>
+              <Field label="Zip code" required error={showErrors ? step2Errors.zip_code : undefined}>
+                <Input value={form.zip_code} onChange={(event) => setValue("zip_code", event.target.value)} placeholder="e.g. 94105" />
+              </Field>
             </div>
           </div>
         ) : null}
 
         {step === 3 ? (
           <div className="space-y-4">
-            <WizardHeading title="Banking Information" description="Bank and statutory details, and the base salary." />
+            <WizardHeading title="Emergency Contact" description="Emergency contact details and emergency code." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Bank account number"><Input value={form.bank_account_number} onChange={(event) => setValue("bank_account_number", event.target.value)} placeholder="e.g. 1234567890" /></Field>
-              <Field label="IFSC code"><Input value={form.ifsc_code} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} placeholder="e.g. HDFC0001234" /></Field>
-              <Field label="PAN number"><Input value={form.pan_number} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} placeholder="e.g. ABCDE1234F" /></Field>
-              <Field label="Aadhaar number"><Input value={form.aadhaar_number} onChange={(event) => setValue("aadhaar_number", event.target.value)} placeholder="e.g. 1234 5678 9012" /></Field>
-              <Field label="UAN number"><Input value={form.uan_number} onChange={(event) => setValue("uan_number", event.target.value)} placeholder="e.g. 100123456789" /></Field>
-              <Field label="Base salary"><Input type="number" min="0" step="0.01" value={currentSalary} onChange={(event) => setCurrentSalary(event.target.value)} placeholder="e.g. 50000.00" /></Field>
+              <Field label="Name" required error={showErrors ? step3Errors.name : undefined}>
+                <Input value={emergencyContact.name} onChange={(event) => setEmergencyContactValue("name", event.target.value)} placeholder="e.g. Jane Doe" />
+              </Field>
+              <Field label="Relationship" required error={showErrors ? step3Errors.relationship : undefined}>
+                <Input value={emergencyContact.relationship} onChange={(event) => setEmergencyContactValue("relationship", event.target.value)} placeholder="e.g. Spouse, Parent, Sibling" />
+              </Field>
+              <Field label="Phone number" required error={showErrors ? step3Errors.phone : undefined}>
+                <Input value={emergencyContact.phone} onChange={(event) => setEmergencyContactValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" />
+              </Field>
+              <Field label="Emergency code" required error={showErrors ? step3Errors.emergency_code : undefined}>
+                <Input value={emergencyContact.emergency_code} onChange={(event) => setEmergencyContactValue("emergency_code", event.target.value)} placeholder="e.g. ICE-9912" />
+              </Field>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 4 ? (
+          <div className="space-y-4">
+            <WizardHeading title="Banking Information" description="Bank, branch, statutory details, and base salary." />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Bank account number" required error={showErrors ? step4Errors.bank_account_number : undefined}>
+                <Input value={form.bank_account_number} onChange={(event) => setValue("bank_account_number", event.target.value)} placeholder="e.g. 1234567890" />
+              </Field>
+              <Field label="IFSC code" required error={showErrors ? step4Errors.ifsc_code : undefined}>
+                <Input value={form.ifsc_code} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} placeholder="e.g. HDFC0001234" />
+              </Field>
+              <Field label="Branch" required error={showErrors ? step4Errors.bank_branch : undefined}>
+                <Input value={form.bank_branch} onChange={(event) => setValue("bank_branch", event.target.value)} placeholder="e.g. Downtown Branch" />
+              </Field>
+              <Field label="Base salary">
+                <Input type="number" min="0" step="0.01" value={currentSalary} onChange={(event) => setCurrentSalary(event.target.value)} placeholder="e.g. 50000.00" />
+              </Field>
+              <Field label="PAN number">
+                <Input value={form.pan_number} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} placeholder="e.g. ABCDE1234F" />
+              </Field>
+              <Field label="Aadhaar number">
+                <Input value={form.aadhaar_number} onChange={(event) => setValue("aadhaar_number", event.target.value)} placeholder="e.g. 1234 5678 9012" />
+              </Field>
+              <Field label="UAN number">
+                <Input value={form.uan_number} onChange={(event) => setValue("uan_number", event.target.value)} placeholder="e.g. 100123456789" />
+              </Field>
             </div>
             <div className="rounded-md border bg-muted/40 p-4">
               <div className="flex items-center gap-2">
@@ -242,7 +373,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <StatusBadge status={`${form.first_name} ${form.last_name}`.trim()} tone="info" />
-                <StatusBadge status={form.employment_type.replace(/_/g, " ")} tone="neutral" />
+                <StatusBadge status={(form.employment_type || "FULL_TIME").replace(/_/g, " ")} tone="neutral" />
                 <StatusBadge status={bankingReady ? "Bank details ready" : "Bank details incomplete"} tone={bankingReady ? "success" : "warning"} />
                 <StatusBadge status={currentSalary.trim() ? "Salary set" : "Salary not set"} tone={currentSalary.trim() ? "success" : "warning"} />
               </div>
@@ -276,7 +407,10 @@ function WizardHeading({ title, description }: { title: string; description: str
 function Field({ label, required, error, hint, children }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="space-y-1.5 text-sm">
-      <span className="font-medium">{label}{required ? " *" : ""}</span>
+      <span className="font-medium">
+        {label}
+        {required ? <span className="ml-1 text-rose-500 font-bold">*</span> : null}
+      </span>
       {children}
       {error ? <span className="block text-xs font-normal text-rose-600">{error}</span> : hint ? <span className="block text-xs font-normal text-muted-foreground">{hint}</span> : null}
     </label>

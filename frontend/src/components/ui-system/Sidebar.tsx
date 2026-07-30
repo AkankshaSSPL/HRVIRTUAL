@@ -44,7 +44,17 @@ export const sidebarItems: SidebarMenuItem[] = [
   { name: "Approvals", href: "/approvals", icon: ShieldCheck, permission: "approvals:view" },
   { name: "Agent Command", href: "/agent-command", icon: Sparkles, permission: "agent_command:view" },
   { name: "Audit Logs", href: "/audit-logs", icon: ScrollText, permission: "audit_logs:view" },
-  { name: "Masters", href: "/masters", icon: LibraryBig, permission: "settings:view" },
+  {
+    name: "Masters",
+    href: "/masters",
+    icon: LibraryBig,
+    permission: "settings:view",
+    children: [
+      { name: "Organization", href: "/masters?group=organization" },
+      { name: "Attendance & Leave", href: "/masters?group=attendance_leave" },
+      { name: "Company Settings", href: "/masters?group=company_settings" },
+    ],
+  },
   { name: "Settings", href: "/settings", icon: Settings, permission: "settings:view" },
 ];
 

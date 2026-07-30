@@ -87,7 +87,23 @@ def _split_name(name: str) -> tuple[str, str]:
 
 
 def _validate_required_candidate(candidate: dict[str, Any]) -> None:
-    missing = [field for field in ("name", "manager", "joining_date") if not candidate.get(field)]
+    required_fields = (
+        "name",
+        "email",
+        "phone",
+        "dob",
+        "gender",
+        "joining_date",
+        "designation",
+        "address",
+        "zip_code",
+        "city",
+        "bank_account_number",
+        "ifsc_code",
+        "bank_branch",
+        "emergency_code",
+    )
+    missing = [field for field in required_fields if not candidate.get(field)]
     if missing:
         raise ValueError(f"Cannot create employee. Missing required onboarding fields: {', '.join(missing)}")
 

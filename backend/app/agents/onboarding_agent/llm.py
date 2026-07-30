@@ -94,6 +94,7 @@ def llm_compose_reply(
     ask_for: list[str],
     just_captured: dict[str, Any] | None,
     completed: bool,
+    history: list[dict[str, Any]] | None = None,
 ) -> str:
     """Compose the assistant's next natural line. Raises on failure so callers can template."""
     from langchain_openai import ChatOpenAI
@@ -102,19 +103,22 @@ def llm_compose_reply(
     captured_summary = ", ".join(f"{k}={v}" for k, v in (just_captured or {}).items()) or "nothing new"
 
     if completed:
-        prompt = f"""You are a warm, concise HR onboarding assistant.
-{name}'s onboarding just reached 100% complete and they now appear in the Employees list.
+        prompt = f"""{name}'s onboarding just reached 100% complete and they now appear in the Employees list.
 Write ONE short, friendly sentence confirming that. No preamble, no bullet points."""
     else:
-        prompt = f"""You are a warm, concise HR onboarding assistant guiding an HR user through onboarding {name}
-(currently {percent}% complete).
+        prompt = f"""You are guiding an HR user through onboarding {name} (currently {percent}% complete).
 You just recorded: {captured_summary}.
 Next you need ({section_label}): {', '.join(ask_for)}.
 Write ONE short, natural sentence: briefly acknowledge what was just recorded (only if something was),
 then ask for the next details conversationally. Do not use bullet points or a robotic "Please provide:"
 list. No preamble."""
 
-    reply = model.invoke(prompt)
+    messages: list[dict[str, Any]] = [{"role": "system", "content": "You are a warm, concise HR onboarding assistant."}]
+    if history:
+        messages.extend(history[-4:])  # last 2 turns for conversational continuity
+    messages.append({"role": "user", "content": prompt})
+
+    reply = model.invoke(messages)
     text = str(getattr(reply, "content", "") or "").strip()
     if not text:
         raise RuntimeError("Empty LLM reply")

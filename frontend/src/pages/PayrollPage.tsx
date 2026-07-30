@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DataTable, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
 import { PayrollConfigPanel } from "@/components/payroll/PayrollConfigPanel";
-import { CompanySettingsPanel } from "@/components/payroll/CompanySettingsPanel";
 import {
   createSalaryComponent,
   deleteSalaryComponent,
@@ -391,7 +390,6 @@ export function PayrollPage() {
         ) : null}
 
         <PayrollConfigPanel />
-        <CompanySettingsPanel />
 
         {formError && !formOpen ? <div className="fixed bottom-6 right-6 z-50"><ToastNotification title="Salary component action failed" description={formError} type="error" /></div> : null}
         <ConfirmDialog
