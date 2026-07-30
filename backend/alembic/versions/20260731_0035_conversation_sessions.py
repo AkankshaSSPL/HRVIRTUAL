@@ -1,15 +1,15 @@
 """conversation sessions
 
-Revision ID: 20260729_0033
-Revises: 20260724_0032
-Create Date: 2026-07-29
+Revision ID: 20260731_0035
+Revises: 20260730_0034
+Create Date: 2026-07-31
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "20260729_0033"
-down_revision = "20260724_0032"
+revision = "20260731_0035"
+down_revision = "20260730_0034"
 branch_labels = None
 depends_on = None
 
