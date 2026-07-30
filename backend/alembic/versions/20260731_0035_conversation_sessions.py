@@ -1,11 +1,12 @@
-"""conversation sessions
+"""Create conversation_sessions and conversation_messages tables
 
-Revision ID: 20260731_0035
-Revises: 20260730_0034
-Create Date: 2026-07-31
+Revision ID: 20260729_0033
+Revises: 20260724_0032
+Create Date: 2026-07-29 00:33:00.000000
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "20260731_0035"
@@ -63,8 +64,8 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_index("ix_conv_messages_session_created", table_name="conversation_messages")
+    op.drop_index("ix_conv_messages_session_created", "conversation_messages")
     op.drop_table("conversation_messages")
-    op.drop_index("ix_conv_sessions_expires", table_name="conversation_sessions")
-    op.drop_index("uq_conv_session_user_active", table_name="conversation_sessions")
+    op.drop_index("ix_conv_sessions_expires", "conversation_sessions")
+    op.drop_index("uq_conv_session_user_active", "conversation_sessions")
     op.drop_table("conversation_sessions")

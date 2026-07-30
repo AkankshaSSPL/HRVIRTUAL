@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -14,7 +13,7 @@ from app.agents.salary_assignment_agent.agent import SalaryAssignmentAgent
 from app.agents.salary_structure_agent.service import SalaryStructureAgent
 import app.agents.employee_agent.handlers  # noqa: F401
 import app.agents.leave_agent.handlers  # noqa: F401
-import app.agents.onboarding_agent.handlers  # noqa: F401  (kept: agent stays registered, see note below)
+import app.agents.onboarding_agent.handlers  # noqa: F401
 import app.agents.salary_assignment_agent.handlers  # noqa: F401
 from app.agents.employee_agent.service import EmployeeAgent
 from app.agents.leave_agent.service import LeaveAgent
@@ -24,33 +23,27 @@ from app.agents.shared.agent_registry import agent_registry
 from app.agents.shared.base_agent import BaseAgent
 from app.agents.shared.execution_tracker import ExecutionTracker
 from app.agents.shared.message_types import AgentMessage, AgentMessageType
-from app.agents.shared.natural_language import IntentExtraction, natural_language_extractor
 from app.agents.shared.runtime_context import RuntimeContext
 from app.agents.shared.state_store import WorkflowStateStore
 from app.agents.shared.workflow_state import ExecutionHistoryItem, WorkflowState, WorkflowStatus
 from app.core.config import settings
 from app.models.agents import AgentRun, AgentRunStatus, AgentStepStatus
 
+# New imports for the architecture redesign
+from app.agents.triage_agent.service import TriageAgent
+from app.services.session_manager import SessionManager
 
-# --- ONBOARDING ROUTING: PARTIALLY RE-ENABLED (B-agent-2) --------------------
-# Per the onboarding implementation plan, only the _route_from_extraction
-# mapping below is re-enabled. The natural-language extractor already
-# classifies onboarding commands at high confidence (see
-# shared/natural_language.py), so submit_command's
-# `route = ... self._route_from_extraction(extraction) or fallback_route`
-# resolves onboarding through extraction alone; the keyword-based fallback
-# paths in CRITICAL_ACTION_KEYWORDS and _analyze_intent are intentionally
-# left commented out (unreached in the normal case, kept as documented
-# fallback wiring if ever needed).
-#
-# B-agent-3: _has_active_onboarding_finishing is a live fallback check (not
-# commented out like the draft/keyword paths above). It exists so a bare
-# continuation reply during the post-creation finishing loop (a seat like
-# "A-3", or "yes" to send the welcome mail) - which the NL extractor cannot
-# classify as an "onboarding" intent on its own - still falls back to
-# onboarding_agent instead of the generic employee-search default.
-# -------------------------------------------------------------------------------
 
+# --- Shim class to feed TriageAgent output into unchanged _route_from_extraction ---
+class _TriageExtraction:
+    """Feeds TriageAgent intent string into _route_from_extraction()."""
+    def __init__(self, intent: str) -> None:
+        self.intent = intent
+
+
+# ---------------------------------------------------------------------------
+# Critical action keywords (unchanged)
+# ---------------------------------------------------------------------------
 CRITICAL_ACTION_KEYWORDS = {
     "create employee": ("employee_agent", "create", "employee", "create"),
     "update employee": ("employee_agent", "update", "employee", "update"),
@@ -64,10 +57,6 @@ CRITICAL_ACTION_KEYWORDS = {
     "generate bank sheet": ("payroll_agent", "generate_bank_sheet", "payroll", "generate_bank_sheet"),
     "deactivate employee": ("employee_agent", "deactivate", "employee", "update"),
     "send official email": ("notification_agent", "send_official_email", "notification", "send_official_email"),
-    # ONBOARDING DISABLED:
-    # "onboard": ("onboarding_agent", "start", "onboarding", "start"),
-    # "hire": ("onboarding_agent", "start", "onboarding", "start"),
-    # "start onboarding": ("onboarding_agent", "start", "onboarding", "start"),
     "offboarding": ("offboarding_agent", "start", "offboarding", "start"),
 }
 
@@ -79,7 +68,7 @@ class PlaceholderSpecializedAgent(BaseAgent):
         self.supported_actions = supported_actions
         self.approval_required_actions = approval_required_actions
 
-    async def run(self, state):  # pragma: no cover - legacy BaseAgent compatibility
+    async def run(self, state):  # pragma: no cover
         return {"message": f"{AGENT_DISPLAY_NAMES.get(self.name, self.name)} foundation workflow completed"}
 
 
@@ -91,7 +80,7 @@ def register_placeholder_agents() -> None:
         PayrollAgent(),
         SalaryAssignmentAgent(),
         SalaryStructureAgent(),
-        OnboardingAgent(),  # ONBOARDING: kept registered on purpose — see note above
+        OnboardingAgent(),
         PlaceholderSpecializedAgent(
             "offboarding_agent",
             "Future offboarding governance agent. Placeholder only.",
@@ -161,9 +150,8 @@ ACTION_SUMMARIES = {
     "balance": "View leave balance",
     "attendance": "Review attendance summary",
     "lop": "Calculate LOP inputs",
-    "start": "Review offboarding start request",
+    "start": "Start workflow",
     "send_official_email": "Review official email request",
-    "start": "Start onboarding workflow",
 }
 
 
@@ -188,44 +176,34 @@ class CoordinatorRuntimeService:
         run_id = run.id
 
         try:
-            extraction = natural_language_extractor.extract(command)
-            self.tracker.step(
-                run,
-                step_name="natural_language_extraction",
-                status=AgentStepStatus.COMPLETED,
-                input_json={"command": command},
-                output_json=extraction.model_dump(mode="json"),
-            )
-            self.tracker.event(
-                run,
-                AgentEventType.TOOL_EXECUTED,
-                "Intent and entities extracted",
-                "coordinator_agent",
-                extraction.model_dump(mode="json"),
-            )
-            fallback_route = self._analyze_intent(command, user_id)
-            fallback_is_meaningful = fallback_route.get("matched_intent") != "general workforce"
-            is_onboarding_continuation = fallback_route.get("matched_intent") == "onboarding finishing conversation"
-            if not is_onboarding_continuation and (extraction.missing_fields or (extraction.confidence < settings.intent_confidence_threshold and not fallback_is_meaningful)):
-                result = self._clarification_result(extraction)
-                state.workflow_status = WorkflowStatus.COMPLETED
-                state.current_step = "needs_clarification"
-                state.result = result
-                state.messages.append(AgentMessage(type=AgentMessageType.AGENT, content=result["message"], agent_name="coordinator_agent", metadata=result))
-                run.metadata_json = {
-                    **(run.metadata_json or {}),
-                    "intent_extraction": extraction.model_dump(mode="json"),
-                    "workflow_state": state.model_dump(mode="json"),
-                    "result": result,
-                }
-                self.tracker.finish(run, AgentRunStatus.COMPLETED, result)
-                return run
+            # ── 1. Session: load history, expire stale active_agent ──────────────
+            session_mgr = SessionManager(self.db)
+            session = session_mgr.get_or_create(user_id)
+            session_mgr.expire_if_stale(session)      # clears active_agent if > 30 min idle
+            history = session_mgr.get_history(session, n=10)
 
-            route = fallback_route if fallback_route.get("matched_intent") == "revise salary" else self._route_from_extraction(extraction) or fallback_route
-            execution_command = extraction.canonical_command or command
+            # ── 2. Triage: one LLM call → intent key ─────────────────────────────
+            triage = TriageAgent()
+            intent = triage.classify(command, history, session.active_agent)
+
+            # ── 3. Route via existing routes dict (unchanged) ─────────────────────
+            route = self._route_from_extraction(_TriageExtraction(intent)) or \
+                    self._route("employee_agent", "inspect", "employee", "inspect", "general workforce")
+
+            self.tracker.step(run, step_name="triage_routing", status=AgentStepStatus.COMPLETED,
+                              input_json={"command": command, "active_agent": session.active_agent},
+                              output_json={"intent": intent, "route": route})
+            self.tracker.event(run, AgentEventType.TOOL_EXECUTED, "Triage classified intent",
+                               "coordinator_agent", {"intent": intent, "agent": route["agent_name"]})
+
+            execution_command = command
+
             self.tracker.event(run, AgentEventType.TOOL_EXECUTED, "Coordinator analyzed user intent", "coordinator_agent", route)
-            self.tracker.step(run, step_name="intent_analysis", status=AgentStepStatus.COMPLETED, input_json={"command": command, "canonical_command": execution_command}, output_json=route)
-            state.add_history(ExecutionHistoryItem(step="intent_analysis", agent_name="coordinator_agent", status="COMPLETED", metadata=route))
+            self.tracker.step(run, step_name="intent_analysis", status=AgentStepStatus.COMPLETED,
+                              input_json={"command": command, "canonical_command": execution_command},
+                              output_json=route)
+            state.add_history(ExecutionHistoryItem(step="intent_analysis", agent_name="coordinator_agent",
+                                                   status="COMPLETED", metadata=route))
 
             state.current_agent = route["agent_name"]
             state.current_step = "agent_selection"
@@ -234,8 +212,10 @@ class CoordinatorRuntimeService:
 
             context = RuntimeContext(workflow_id=state.workflow_id, user_id=user_id, correlation_id=state.workflow_id)
 
-            if route["agent_name"] in {"employee_agent", "onboarding_agent", "attendance_agent", "leave_agent", "payroll_agent", "salary_structure_agent", "salary_assignment_agent"}:
-                result = self._invoke_domain_agent(route, execution_command, context, run)
+            if route["agent_name"] in {"employee_agent", "onboarding_agent", "attendance_agent", "leave_agent",
+                                        "payroll_agent", "salary_structure_agent", "salary_assignment_agent"}:
+                result = self._invoke_domain_agent(route, execution_command, context, run,
+                                                   history=history, active_entity_id=session.active_entity_id)
                 if result.get("approval_request_id"):
                     state.workflow_status = WorkflowStatus.WAITING_APPROVAL
                     state.approval_status = "PENDING"
@@ -253,14 +233,16 @@ class CoordinatorRuntimeService:
                         run,
                         step_name="approval_interrupt",
                         status=AgentStepStatus.PENDING,
-                        output_json={"approval_request_id": result["approval_request_id"], "structured_response": result.get("structured_response")},
+                        output_json={"approval_request_id": result["approval_request_id"],
+                                     "structured_response": result.get("structured_response")},
                     )
                     self.tracker.event(
                         run,
                         AgentEventType.APPROVAL_REQUIRED,
                         f"{AGENT_DISPLAY_NAMES.get(route['agent_name'], route['agent_name'])} paused for approval",
                         route["agent_name"],
-                        {"approval_request_id": result["approval_request_id"], "structured_response": result.get("structured_response")},
+                        {"approval_request_id": result["approval_request_id"],
+                         "structured_response": result.get("structured_response")},
                     )
                     self.tracker.event(run, AgentEventType.WORKFLOW_PAUSED, "Workflow paused", "coordinator_agent")
                     run.status = AgentRunStatus.WAITING_FOR_APPROVAL
@@ -290,7 +272,9 @@ class CoordinatorRuntimeService:
                         event_type = AgentEventType.LEAVE_APPLIED
                     else:
                         event_type = AgentEventType.AGENT_COMPLETED
-                    self.tracker.event(run, event_type, f"{AGENT_DISPLAY_NAMES.get(route['agent_name'], route['agent_name'])} completed operation", route["agent_name"], result)
+                    self.tracker.event(run, event_type,
+                                       f"{AGENT_DISPLAY_NAMES.get(route['agent_name'], route['agent_name'])} completed operation",
+                                       route["agent_name"], result)
                     run.status = AgentRunStatus.COMPLETED
                     run.completed_at = datetime.now(timezone.utc)
                     if state.messages[-1].metadata:
@@ -375,9 +359,26 @@ class CoordinatorRuntimeService:
                     state.messages[-1].metadata["completed_at"] = run.completed_at.isoformat()
                     state.messages[-1].metadata["duration_ms"] = int((run.completed_at - run.started_at).total_seconds() * 1000) if run.started_at else None
 
+            # ── Session: persist turn and update active_agent ─────────────────────
+            session_mgr.append(session, "user", command)
+            session_mgr.append(session, "assistant", result.get("message", ""),
+                               agent=route["agent_name"],
+                               metadata=result.get("structured_response"))
+
+            sr = result.get("structured_response") or {}
+            if sr.get("type") == "onboarding_finishing" and not sr.get("completed"):
+                emp_id = sr.get("employee_id")
+                session_mgr.set_active(session, "onboarding_agent",
+                                       entity_id=UUID(emp_id) if emp_id else None,
+                                       entity_type="employee_onboarding")
+            elif sr.get("type") == "confirmation_card":
+                session_mgr.set_active(session, "employee_agent")
+            elif sr.get("completed") or route["agent_name"] not in {"onboarding_agent", "employee_agent"}:
+                session_mgr.clear_active(session)
+
             run.metadata_json = {
                 **(run.metadata_json or {}),
-                "intent_extraction": extraction.model_dump(mode="json"),
+                "intent_extraction": {"intent": intent, "source": "triage_agent"},
                 "workflow_state": state.model_dump(mode="json"),
                 "result": result,
             }
@@ -424,6 +425,10 @@ class CoordinatorRuntimeService:
             self.tracker.finish(run, AgentRunStatus.FAILED, result)
             return run
 
+    # ------------------------------------------------------------------
+    # Remaining methods – unchanged except where noted
+    # ------------------------------------------------------------------
+
     def get_workflow(self, workflow_id: str) -> AgentRun:
         run = self.db.scalar(
             select(AgentRun)
@@ -450,7 +455,7 @@ class CoordinatorRuntimeService:
         run = self.get_workflow(workflow_id)
         return [AgentEvent.model_validate(event) for event in (run.metadata_json or {}).get("events", [])]
 
-    def _route_from_extraction(self, extraction: IntentExtraction) -> dict[str, Any] | None:
+    def _route_from_extraction(self, extraction: _TriageExtraction) -> dict[str, Any] | None:
         routes = {
             "employee_search": ("employee_agent", "search", "employee", "inspect"),
             "employee_profile": ("employee_agent", "show_profile", "employee", "inspect"),
@@ -487,7 +492,6 @@ class CoordinatorRuntimeService:
             "revise_salary": ("salary_assignment_agent", "revise", "salary_assignment", "revise"),
             "generate_payroll": ("payroll_agent", "process", "payroll", "process"),
             "inspect_payroll": ("payroll_agent", "inspect", "payroll", "inspect"),
-            # ONBOARDING RE-ENABLED (B-agent-2):
             "onboarding": ("onboarding_agent", "start", "onboarding", "start"),
         }
         selected = routes.get(extraction.intent)
@@ -495,208 +499,6 @@ class CoordinatorRuntimeService:
             return None
         agent_name, action, approval_module, approval_action = selected
         return self._route(agent_name, action, approval_module, approval_action, extraction.intent)
-
-    def _clarification_result(self, extraction: IntentExtraction) -> dict[str, Any]:
-        if extraction.missing_fields:
-            question = extraction.clarification_question or f"Please provide: {', '.join(extraction.missing_fields)}."
-            title = "A few details are needed"
-        else:
-            question = extraction.clarification_question or "Could you clarify what HR operation you want me to perform?"
-            title = "Please clarify the request"
-        return {
-            "agent": "coordinator_agent",
-            "agent_display_name": "HR Assistant",
-            "action": "clarify",
-            "message": question,
-            "operation_summary": title,
-            "execution_status": "Needs Input",
-            "workflow_status": "Needs Input",
-            "structured_response": {
-                "type": "status_banner",
-                "title": title,
-                "summary": question,
-                "missing_fields": extraction.missing_fields,
-            },
-        }
-
-    def _analyze_intent(self, command: str, user_id: UUID | None) -> dict[str, Any]:
-        normalized = command.lower()
-        if normalized.strip() in {"yes", "no", "confirm", "proceed", "apply", "save", "cancel", "yes update", "do not update", "don't update"} and self._has_active_employee_confirmation(user_id):
-            return self._route("employee_agent", "confirm_update", "employee", "inspect", "employee update confirmation")
-
-        # B-agent-3: bare continuation replies during the post-creation finishing loop
-        # (a seat like "A-3", or "yes"/"confirm" to send the welcome mail) won't classify
-        # as an "onboarding" intent through the NL extractor on their own, so this fallback
-        # keeps routing them back to onboarding_agent until the loop reports completed.
-        if self._has_active_onboarding_finishing(user_id):
-            return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding finishing conversation")
-
-        # ONBOARDING DISABLED:
-        # if "onboard" in normalized or "start onboarding" in normalized or "hire " in normalized:
-        #     return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding")
-
-        if re.search(r"\b(?:is\s+(?:the\s+)?manager\s+of|reports\s+to|make\s+.+?\s+(?:the\s+)?manager\s+of|assign\s+.+?\s+as\s+(?:the\s+)?manager)\b", normalized):
-            return self._route("employee_agent", "change_manager", "employee", "change_manager", "change reporting manager")
-
-        if (
-            "salary" in normalized
-            and any(word in normalized for word in ("breakup", "breakage", "breakdown", "break down"))
-            and bool(re.search(r"\b(?:all|every|evry)\s+(?:employee|employees|staff)\b|\beveryone\b|\bworkforce\b", normalized))
-            and any(word in normalized for word in ("update", "refresh", "recalculate", "re-calculate", "sync"))
-        ):
-            return self._route("salary_assignment_agent", "refresh_breakups", "salary_assignment", "refresh_breakups", "refresh salary breakups")
-
-        if "salary" in normalized and any(keyword in normalized for keyword in ("assign", "breakup", "history", "revise", "increase", "decrease", "update", "change", "pending", "approve", "reject")):
-            if any(word in normalized for word in ("pending", "approve", "reject")):
-                return self._route("salary_assignment_agent", "pending_approvals", "salary_assignment", "inspect", "pending salary approvals")
-            if "history" in normalized:
-                return self._route("salary_assignment_agent", "history", "salary_assignment", "inspect", "salary history")
-            if "breakup" in normalized:
-                return self._route("salary_assignment_agent", "breakup", "salary_assignment", "inspect", "salary breakup")
-            if any(word in normalized for word in ("revise", "increase", "decrease", "update", "change")):
-                return self._route("salary_assignment_agent", "revise", "salary_assignment", "activate", "revise salary")
-            if "assign" in normalized:
-                return self._route("salary_assignment_agent", "assign", "salary_assignment", "activate", "assign salary")
-
-        if "salary" in normalized and "structure" in normalized:
-            if any(word in normalized for word in ("remove", "delete")):
-                return self._route("salary_structure_agent", "delete_structure", "payroll", "delete_structure", "remove salary structure")
-            if any(word in normalized for word in ("update", "change")):
-                return self._route("salary_structure_agent", "update_structure", "payroll", "update_structure", "update salary structure")
-            if any(word in normalized for word in ("create", "save", "confirm", "add")):
-                return self._route("salary_structure_agent", "create_structure", "payroll", "create_structure", "create salary structure")
-            return self._route("salary_structure_agent", "inspect", "payroll", "inspect", "salary structures")
-
-        if "component" in normalized and any(keyword in normalized for keyword in ("salary", "earning", "deduction", "payroll", "component")):
-            if any(word in normalized for word in ("remove", "delete")):
-                return self._route("payroll_agent", "delete_component", "payroll", "delete_component", "remove salary component")
-            if any(word in normalized for word in ("update", "change")):
-                return self._route("payroll_agent", "update_component", "payroll", "update_component", "update salary component")
-            if any(word in normalized for word in ("create", "add")):
-                return self._route("payroll_agent", "create_component", "payroll", "create_component", "create salary component")
-            return self._route("payroll_agent", "inspect", "payroll", "inspect", "salary components")
-        
-        # Route salary-structure creation to salary_structure_agent before component creation
-        if ("create " in normalized and "salary structure" in normalized) or (
-            "salary" in normalized and "structure" in normalized
-        ):
-            return self._route("salary_structure_agent", "create_structure", "payroll", "create_structure", "create salary structure")
-
-        # Check for payroll component creation BEFORE generic salary keywords
-        if "create " in normalized and any(keyword in normalized for keyword in ("earning", "deduction", "component", "%", "₹")):
-            return self._route("payroll_agent", "create_component", "payroll", "create_component", "create salary component")
-        if any(keyword in normalized for keyword in ("salary component", "salary components")) and "create " not in normalized:
-            return self._route("payroll_agent", "inspect", "payroll", "inspect", "salary components")
-        
-        for keyword, route in CRITICAL_ACTION_KEYWORDS.items():
-            if keyword in normalized:
-                agent_name, action, approval_module, approval_action = route
-                agent = agent_registry.get(agent_name)
-                return {
-                    "matched_intent": keyword,
-                    "agent_name": agent_name,
-                    "action": action,
-                    "approval_required": action in agent.approval_required_actions,
-                    "approval_module": approval_module,
-                    "approval_action": approval_action,
-                }
-
-        # ONBOARDING DISABLED:
-        # if self._has_active_onboarding_draft(user_id) and not any(keyword in normalized for keyword in ("show employee", "update", "change", "delete", "remove", "deactivate", "salary", "manager", "department", "payroll", "leave", "attendance", "offboarding")):
-        #     return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding conversation")
-
-        if "leave" in normalized or "wfh" in normalized or "work from home" in normalized:
-            if any(word in normalized for word in ("create", "add", "setup", "policy", "type")):
-                action = "create_type"
-            elif "approve" in normalized:
-                action = "approve"
-            elif "reject" in normalized:
-                action = "reject"
-            elif "cancel" in normalized:
-                action = "cancel"
-            elif "balance" in normalized:
-                action = "balance"
-            elif "history" in normalized:
-                action = "history"
-            elif "pending" in normalized:
-                action = "pending"
-            elif "calendar" in normalized or "who is on leave" in normalized:
-                action = "calendar"
-            else:
-                action = "apply"
-            return self._route("leave_agent", action, "leave", action if action == "approve" else "inspect", "leave")
-        if ("mark " in normalized or "record " in normalized) and any(status in normalized for status in ("present", "absent", "half day", "half-day", "wfh", "work from home", "holiday", "weekly off", "on duty")):
-            return self._route("attendance_agent", "record", "attendance", "inspect", "attendance record")
-        if "attendance" in normalized:
-            action = "payroll_summary" if "payroll" in normalized or "prepare" in normalized else "show"
-            return self._route("attendance_agent", action, "attendance", "inspect", "attendance")
-        if "lop" in normalized or "loss of pay" in normalized:
-            return self._route("attendance_agent", "lop", "attendance", "inspect", "lop")
-        if "generate" in normalized and "payroll" in normalized:
-            return self._route("payroll_agent", "process", "payroll", "process", "generate payroll")
-        if "payroll" in normalized:
-            return self._route("payroll_agent", "inspect", "payroll", "inspect", "payroll")
-        # ONBOARDING DISABLED:
-        # if "onboarding" in normalized:
-        #     return self._route("onboarding_agent", "start", "onboarding", "start", "onboarding")
-        if "offboarding" in normalized:
-            return self._route("offboarding_agent", "inspect", "offboarding", "inspect", "offboarding")
-        return self._route("employee_agent", "inspect", "employee", "inspect", "general workforce")
-
-    def _has_active_onboarding_draft(self, user_id: UUID | None) -> bool:
-        # ONBOARDING DISABLED: no longer called from _analyze_intent, kept intact
-        # so it can be reconnected in one step when onboarding is re-enabled.
-        if not user_id:
-            return False
-        runs = self.db.scalars(
-            select(AgentRun)
-            .where(AgentRun.agent_name == "coordinator_agent", AgentRun.requested_by == user_id)
-            .order_by(AgentRun.created_at.desc())
-            .limit(8)
-        )
-        for run in runs:
-            result = (run.metadata_json or {}).get("result") or {}
-            response = result.get("structured_response") or {}
-            if response.get("type") in {"missing_fields", "onboarding_summary"}:
-                return not response.get("started")
-        return False
-
-    def _has_active_onboarding_finishing(self, user_id: UUID | None) -> bool:
-        # B-agent-3: mirrors _has_active_onboarding_draft's shape exactly, but scans for
-        # the "onboarding_finishing" structured_response type emitted by the post-creation
-        # documents/seating/welcome_mail loop instead of the pre-creation draft types.
-        if not user_id:
-            return False
-        runs = self.db.scalars(
-            select(AgentRun)
-            .where(AgentRun.agent_name == "coordinator_agent", AgentRun.requested_by == user_id)
-            .order_by(AgentRun.created_at.desc())
-            .limit(8)
-        )
-        for run in runs:
-            result = (run.metadata_json or {}).get("result") or {}
-            response = result.get("structured_response") or {}
-            if response.get("type") == "onboarding_finishing":
-                return not response.get("completed")
-        return False
-
-    def _has_active_employee_confirmation(self, user_id: UUID | None) -> bool:
-        if not user_id:
-            return False
-        runs = self.db.scalars(
-            select(AgentRun)
-            .where(AgentRun.agent_name == "coordinator_agent", AgentRun.requested_by == user_id)
-            .order_by(AgentRun.created_at.desc())
-            .limit(10)
-        )
-        for run in runs:
-            result = (run.metadata_json or {}).get("result") or {}
-            response = result.get("structured_response") or {}
-            if response.get("type") == "confirmation_card":
-                return True
-            if result.get("action") in {"update", "confirm_update"} and result.get("execution_status") == "Completed":
-                return False
-        return False
 
     def _route(self, agent_name: str, action: str, approval_module: str, approval_action: str, matched_intent: str) -> dict[str, Any]:
         agent = agent_registry.get(agent_name)
@@ -709,42 +511,23 @@ class CoordinatorRuntimeService:
             "approval_action": approval_action,
         }
 
-    def _invoke_placeholder_agent(self, route: dict[str, Any], command: str, context: RuntimeContext, run: AgentRun) -> dict[str, Any]:
-        operation_summary = ACTION_SUMMARIES.get(route["action"], "Coordinate workforce operation")
-        agent_display_name = AGENT_DISPLAY_NAMES.get(route["agent_name"], route["agent_name"])
-        result = {
-            "agent": route["agent_name"],
-            "agent_display_name": agent_display_name,
-            "action": route["action"],
-            "message": f"{agent_display_name} is not implemented yet. No HRMS records were changed.",
-            "operation_summary": operation_summary,
-            "execution_status": "Not Available",
-            "workflow_status": "Blocked",
-            "execution_summary": "The coordinator routed the request, but this specialized agent is still a placeholder.",
-            "next_actions": "Build and register the domain service before enabling this command.",
-            "command": command,
-            "workflow_id": context.workflow_id,
-            "started_at": run.started_at.isoformat() if run.started_at else None,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "structured_response": {
-                "type": "status_banner",
-                "title": f"{agent_display_name} not available",
-                "summary": "This workflow has not been implemented yet. Nothing was changed.",
-                "payload": {"agent": route["agent_name"], "action": route["action"]},
-            },
-        }
-        self.tracker.step(
-            run,
-            step_name="route_to_agent",
-            status=AgentStepStatus.FAILED,
-            input_json={"command": command, "route": route},
-            output_json=result,
-        )
-        return result
-
-    def _invoke_domain_agent(self, route: dict[str, Any], command: str, context: RuntimeContext, run: AgentRun) -> dict[str, Any]:
+    def _invoke_domain_agent(
+        self,
+        route: dict[str, Any],
+        command: str,
+        context: RuntimeContext,
+        run: AgentRun,
+        history: list[dict] | None = None,
+        active_entity_id: UUID | None = None,
+    ) -> dict[str, Any]:
         if route["agent_name"] == "onboarding_agent":
-            result = OnboardingAgent(self.db).execute(command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = OnboardingAgent(self.db).execute(
+                command=command,
+                user_id=context.user_id,
+                workflow_id=context.workflow_id,
+                history=history,
+                active_entity_id=active_entity_id,
+            )
             step_name = "onboarding_agent_execution"
         elif route["agent_name"] == "attendance_agent":
             result = AttendanceAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
@@ -774,6 +557,39 @@ class CoordinatorRuntimeService:
             run,
             step_name=step_name,
             status=AgentStepStatus.PENDING if result.get("approval_request_id") else AgentStepStatus.COMPLETED,
+            input_json={"command": command, "route": route},
+            output_json=result,
+        )
+        return result
+
+    def _invoke_placeholder_agent(self, route: dict[str, Any], command: str, context: RuntimeContext, run: AgentRun) -> dict[str, Any]:
+        operation_summary = ACTION_SUMMARIES.get(route["action"], "Coordinate workforce operation")
+        agent_display_name = AGENT_DISPLAY_NAMES.get(route["agent_name"], route["agent_name"])
+        result = {
+            "agent": route["agent_name"],
+            "agent_display_name": agent_display_name,
+            "action": route["action"],
+            "message": f"{agent_display_name} is not implemented yet. No HRMS records were changed.",
+            "operation_summary": operation_summary,
+            "execution_status": "Not Available",
+            "workflow_status": "Blocked",
+            "execution_summary": "The coordinator routed the request, but this specialized agent is still a placeholder.",
+            "next_actions": "Build and register the domain service before enabling this command.",
+            "command": command,
+            "workflow_id": context.workflow_id,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "structured_response": {
+                "type": "status_banner",
+                "title": f"{agent_display_name} not available",
+                "summary": "This workflow has not been implemented yet. Nothing was changed.",
+                "payload": {"agent": route["agent_name"], "action": route["action"]},
+            },
+        }
+        self.tracker.step(
+            run,
+            step_name="route_to_agent",
+            status=AgentStepStatus.FAILED,
             input_json={"command": command, "route": route},
             output_json=result,
         )
