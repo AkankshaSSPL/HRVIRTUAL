@@ -1,28 +1,33 @@
 import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DataTable, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
 import { PayrollConfigPanel } from "@/components/payroll/PayrollConfigPanel";
+import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
+import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
 import {
   createSalaryComponent,
   deleteSalaryComponent,
+  exportPayrollSheet,
+  generatePayrollRun,
+  getPayrollRuns,
   getSalaryComponents,
   getSalaryStructures,
+  submitPayrollApproval,
   updateSalaryComponent,
+  type PayrollRunSummary,
   type SalaryComponentRecord,
   type SalaryStructureRecord,
 } from "@/services/payroll";
 import { getLookups } from "@/services/lookups";
 
-// NOTE: Payroll run generation/export/approval has no REST API — it's a
-// chat-only PayrollAgent action ("process" / "export" / "submit_approval").
-// PayrollRunCard and PayrollExportDownload render inside Agent Command, not
-// here. See the note above the (removed) run-related imports in this diff
-// if you're comparing against an earlier version of this file.
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTH_OPTIONS = MONTH_NAMES.map((label, i) => ({ value: i + 1, label }));
+const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
 type SalaryComponentForm = {
   name: string;
@@ -56,6 +61,10 @@ export function PayrollPage() {
   const [formState, setFormState] = useState<SalaryComponentForm>(defaultFormState);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [exportResults, setExportResults] = useState<Record<string, { title: string; filename: string; download_url: string }>>({});
+
   const componentsQuery = useQuery({ queryKey: ["payroll-components"], queryFn: getSalaryComponents });
   const components = componentsQuery.data ?? [];
   const structuresQuery = useQuery({ queryKey: ["payroll-structures"], queryFn: getSalaryStructures });
@@ -63,6 +72,42 @@ export function PayrollPage() {
   const lookupsQuery = useQuery({
     queryKey: ["lookups", "payroll-component-form"],
     queryFn: () => getLookups(["salary_component_type", "salary_calculation_type"]),
+  });
+
+  const runsQuery = useQuery({ queryKey: ["payroll-runs"], queryFn: getPayrollRuns });
+  const runs = runsQuery.data ?? [];
+
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const generateRunMutation = useMutation({
+    mutationFn: () => generatePayrollRun(selectedMonth, selectedYear),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      setRunError(null);
+    },
+    onError: (error) => setRunError(error instanceof Error ? error.message : "Unable to generate payroll run."),
+  });
+
+  const submitApprovalMutation = useMutation({
+    mutationFn: (runId: string) => submitPayrollApproval(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      setRunError(null);
+    },
+    onError: (error) => setRunError(error instanceof Error ? error.message : "Unable to submit payroll for approval."),
+  });
+
+  const exportRunMutation = useMutation({
+    mutationFn: ({ runId, type }: { runId: string; type: "employee" | "consultant" | "bank" | "tds" }) => exportPayrollSheet(runId, type),
+    onSuccess: (result, variables) => {
+      const typeLabels: Record<string, string> = { employee: "Employee Sheet", consultant: "Consultant Sheet", bank: "Bank Sheet", tds: "TDS Sheet" };
+      setExportResults((prev) => ({ ...prev, [variables.runId]: { title: typeLabels[variables.type], ...result } }));
+      if (variables.type === "bank") {
+        queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
+      }
+      setRunError(null);
+    },
+    onError: (error) => setRunError(error instanceof Error ? error.message : "Unable to export payroll sheet."),
   });
 
   const createMutation = useMutation({
@@ -232,6 +277,63 @@ export function PayrollPage() {
           }
         />
 
+        <SectionCard title="Payroll Runs" icon={<FileSpreadsheet className="h-4 w-4" />}>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <select
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(Number(event.target.value))}
+              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {MONTH_OPTIONS.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(event) => setSelectedYear(Number(event.target.value))}
+              className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <Button onClick={() => generateRunMutation.mutate()} disabled={generateRunMutation.isPending}>
+              {generateRunMutation.isPending ? "Generating..." : "Generate Payroll"}
+            </Button>
+          </div>
+
+          {runError ? <p className="mb-4 text-sm text-destructive">{runError}</p> : null}
+
+          {runsQuery.isLoading ? (
+            <LoadingSkeleton rows={3} />
+          ) : runs.length === 0 ? (
+            <EmptyState title="No payroll runs yet" description="Select a month and year, then click Generate Payroll." />
+          ) : (
+            <div className="space-y-4">
+              {runs.map((run: PayrollRunSummary) => (
+                <div key={run.id} className="space-y-3">
+                  <PayrollRunCard
+                    runId={run.id}
+                    month={`${MONTH_NAMES[run.month - 1]} ${run.year}`}
+                    status={run.status}
+                    employeeCount={run.employee_count}
+                    skipped={run.skipped}
+                    exportsLocked={!["APPROVED", "BANK_SHEET_GENERATED", "COMPLETED"].includes(run.status)}
+                    onExport={(type) => exportRunMutation.mutate({ runId: run.id, type })}
+                    onSubmitApproval={run.status === "DRAFT" ? () => submitApprovalMutation.mutate(run.id) : undefined}
+                  />
+                  {exportResults[run.id] ? (
+                    <PayrollExportDownload
+                      title={exportResults[run.id].title}
+                      filename={exportResults[run.id].filename}
+                      downloadUrl={exportResults[run.id].download_url}
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
 
         {componentsQuery.isLoading ? (
           <SectionCard>

@@ -1,11 +1,11 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,13 +13,22 @@ from app.api.deps import get_current_user, require_permissions
 from app.db.session import get_db
 from app.models.payroll import SalaryComponent
 from app.models.payroll import SalaryStructure, SalaryStructureItem
-from app.models.payroll.models import EmployeeSalaryAssignment
+from app.models.payroll.models import EmployeeSalaryAssignment, PayrollRun, PayrollRunItem, PayrollRunStatus
 from app.models.payroll import CompanySettings, EmployeeTDSConfig, PayrollConfig
 from app.models.employee import Employee
 from app.models.auth import User
 from app.agents.payroll_agent.tools import normalize_code
 from app.agents.salary_assignment_agent.services import SalaryAssignmentService
-from app.services.payroll_export import STORAGE_DIR, is_safe_filename
+from app.agents.approval_agent.service import ApprovalEngineService
+from app.services.payroll_computation import compute_payroll_run
+from app.services.payroll_export import (
+    STORAGE_DIR,
+    generate_bank_sheet,
+    generate_consultant_sheet,
+    generate_employee_sheet,
+    generate_tds_sheet,
+    is_safe_filename,
+)
 
 router = APIRouter()
 
@@ -305,6 +314,169 @@ def get_employee_salary_assignments(employee_id: UUID, db: Session = Depends(get
     ).all()
     svc = SalaryAssignmentService(db)
     return [svc.assignment_summary(a) for a in assignments]
+
+
+# ── Payroll Runs ──────────────────────────────────────────────────────────────
+
+class PayrollRunCreateRequest(BaseModel):
+    month: int = Field(ge=1, le=12)
+    year: int = Field(ge=2020, le=2099)
+
+
+class PayrollExportRequest(BaseModel):
+    type: Literal["employee", "consultant", "bank", "tds"]
+
+
+class PayrollRunSummary(BaseModel):
+    id: UUID
+    month: int
+    year: int
+    status: str
+    employee_count: int
+    net_payable: float
+    skipped: list[str]
+    approved_at: datetime | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+def _get_run_or_404(db: Session, run_id: UUID) -> PayrollRun:
+    run = db.get(PayrollRun, run_id)
+    if not run or run.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payroll run not found")
+    return run
+
+
+def _run_to_summary(run: PayrollRun) -> PayrollRunSummary:
+    meta = run.metadata_json or {}
+    return PayrollRunSummary(
+        id=run.id,
+        month=run.month,
+        year=run.year,
+        status=run.status,
+        employee_count=meta.get("employee_count", 0),
+        net_payable=meta.get("total_net_payable", 0.0),
+        skipped=meta.get("skipped", []),
+        approved_at=run.approved_at,
+    )
+
+
+@router.get("/runs", response_model=list[PayrollRunSummary], dependencies=[Depends(require_permissions("payroll:view"))])
+def list_payroll_runs(db: Session = Depends(get_db)) -> list[PayrollRunSummary]:
+    runs = db.scalars(
+        select(PayrollRun)
+        .where(PayrollRun.deleted_at.is_(None))
+        .order_by(PayrollRun.year.desc(), PayrollRun.month.desc())
+    ).all()
+    return [_run_to_summary(run) for run in runs]
+
+
+@router.post("/runs", response_model=PayrollRunSummary, dependencies=[Depends(require_permissions("payroll:manage"))])
+def generate_payroll_run(
+    payload: PayrollRunCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PayrollRunSummary:
+    existing = db.scalar(
+        select(PayrollRun)
+        .where(PayrollRun.month == payload.month, PayrollRun.year == payload.year)
+        .where(PayrollRun.deleted_at.is_(None))
+    )
+    if existing and existing.status != PayrollRunStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payroll for {payload.month}/{payload.year} is {existing.status}. Cannot regenerate.",
+        )
+
+    line_items, skipped = compute_payroll_run(db, payload.month, payload.year)
+
+    if existing:
+        db.execute(delete(PayrollRunItem).where(PayrollRunItem.payroll_run_id == existing.id))
+        run = existing
+    else:
+        run = PayrollRun(month=payload.month, year=payload.year, generated_by=current_user.id)
+        db.add(run)
+        db.flush()
+
+    net_payable = 0.0
+    for item_data in line_items:
+        net_payable += float(item_data.get("net_salary", 0))
+        db.add(PayrollRunItem(payroll_run_id=run.id, **item_data))
+
+    run.status = PayrollRunStatus.DRAFT
+    run.metadata_json = {
+        "skipped": skipped,
+        "total_net_payable": net_payable,
+        "employee_count": len(line_items),
+    }
+    db.commit()
+    db.refresh(run)
+    return _run_to_summary(run)
+
+
+@router.post("/runs/{run_id}/submit-approval", response_model=PayrollRunSummary, dependencies=[Depends(require_permissions("payroll:manage"))])
+def submit_payroll_for_approval(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PayrollRunSummary:
+    run = _get_run_or_404(db, run_id)
+    if run.status != PayrollRunStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only DRAFT runs can be submitted. Current status: {run.status}",
+        )
+    meta = run.metadata_json or {}
+    run.status = PayrollRunStatus.PENDING_APPROVAL
+    db.add(run)
+    # create_approval() flushes + commits the session itself, so this also
+    # persists the status change above — no separate db.commit() needed here.
+    ApprovalEngineService(db).create_approval(
+        module_name="payroll",
+        action_name="approve_payroll_run",
+        payload_json={
+            "payroll_run_id": str(run.id),
+            "month": run.month,
+            "year": run.year,
+            "total_employees": meta.get("employee_count", 0),
+            "total_net_payable": meta.get("total_net_payable", 0.0),
+        },
+        approval_reason="Payroll run requires finance approval before bank sheet export.",
+        requested_by=current_user.id,
+        workflow_id=str(run.id),
+    )
+    db.refresh(run)
+    return _run_to_summary(run)
+
+
+@router.post("/runs/{run_id}/export", dependencies=[Depends(require_permissions("payroll:view"))])
+def export_payroll_sheet(
+    run_id: UUID,
+    payload: PayrollExportRequest,
+    db: Session = Depends(get_db),
+) -> dict:
+    run = _get_run_or_404(db, run_id)
+    if payload.type == "bank" and run.status not in {
+        PayrollRunStatus.APPROVED, PayrollRunStatus.BANK_SHEET_GENERATED, PayrollRunStatus.COMPLETED
+    }:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bank sheet requires approved payroll. Submit for approval first.")
+
+    company = db.scalar(select(CompanySettings).where(CompanySettings.active == True, CompanySettings.deleted_at.is_(None)))  # noqa: E712
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company settings not configured yet.")
+
+    generators = {
+        "employee": generate_employee_sheet,
+        "consultant": generate_consultant_sheet,
+        "bank": generate_bank_sheet,
+        "tds": generate_tds_sheet,
+    }
+    filename = generators[payload.type](db, run, company)
+
+    if payload.type == "bank" and run.status == PayrollRunStatus.APPROVED:
+        run.status = PayrollRunStatus.BANK_SHEET_GENERATED
+        db.commit()
+
+    return {"filename": filename, "download_url": f"/api/v1/payroll/export/{filename}"}
 
 
 # ── Payroll Export Download ──────────────────────────────────────────────────

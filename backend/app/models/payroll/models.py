@@ -52,6 +52,10 @@ class PayrollRun(BaseModel):
     generated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Snapshot of run-level totals computed at generation time — avoids N+1
+    # item-count queries on the list endpoint. Shape:
+    # {"skipped": [...], "total_net_payable": 450000.0, "employee_count": 5}
+    metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     items: Mapped[list["PayrollRunItem"]] = relationship(back_populates="payroll_run", cascade="all, delete-orphan")
 

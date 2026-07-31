@@ -165,10 +165,29 @@ export function getEmployeeTDSConfigs(employeeId: string) {
 }
 
 // ── Payroll Runs ────────────────────────────────────────────────────────────
-// NOTE: There is no REST API for generating/exporting/approving payroll runs.
-// PayrollAgent only exposes these as chat actions ("process", "export",
-// "submit_approval") dispatched from free-text commands, rendered via
-// structured_response types "payroll_summary" / "payroll_export" inside
-// AgentCommandPage.tsx. PayrollRunCard and PayrollExportDownload belong
-// there, driven by onSend(...), not by REST calls from PayrollPage.tsx.
-// Nothing to export here until/unless you add real REST endpoints for it.
+export type PayrollRunSummary = {
+  id: string;
+  month: number;
+  year: number;
+  status: string;
+  employee_count: number;
+  net_payable: number;
+  skipped: string[];
+  approved_at: string | null;
+};
+
+export function getPayrollRuns() {
+  return apiGet<PayrollRunSummary[]>("/payroll/runs");
+}
+
+export function generatePayrollRun(month: number, year: number) {
+  return apiPost<PayrollRunSummary>("/payroll/runs", { month, year });
+}
+
+export function submitPayrollApproval(runId: string) {
+  return apiPost<PayrollRunSummary>(`/payroll/runs/${runId}/submit-approval`, {});
+}
+
+export function exportPayrollSheet(runId: string, type: "employee" | "consultant" | "bank" | "tds") {
+  return apiPost<{ filename: string; download_url: string }>(`/payroll/runs/${runId}/export`, { type });
+}
