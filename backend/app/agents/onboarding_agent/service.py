@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.models.agents.models import AgentRun
 from app.models.employee import Employee
 from app.agents.onboarding_agent.tools import parsed_from_command
+from app.agents.shared.base_agent import BaseAgent
 from app.services.onboarding_progress import compute_onboarding_progress
 from app.agents.onboarding_agent.llm import llm_compose_reply
 
@@ -73,12 +74,17 @@ def _get_employee_by_id(db: Session, employee_id: UUID) -> Optional[Employee]:
 
 # --- Agent Implementation ---
 
-class OnboardingAgent:
-    name: str = "onboarding_agent"  # 👈 Add this line (or set self.name below)
+class OnboardingAgent(BaseAgent):
+    name = "onboarding_agent"
+    description = "Conversational employee onboarding — collects candidate details step by step."
+    supported_actions = ["start", "inspect"]
+    approval_required_actions = ["start"]
 
     def __init__(self, db: Optional[Session] = None):
-        self.name = "onboarding_agent"  # 👈 Added attribute expected by agent_registry
         self.db = db
+
+    async def run(self, state):  # pragma: no cover - BaseAgent compatibility
+        return {"message": "Onboarding Agent requires runtime invocation."}
 
     def execute(
         self,

@@ -926,7 +926,18 @@ export function AgentCommandPage() {
   // NEW: seat-map modal opened from the onboarding_finishing card
   const [seatingFor, setSeatingFor] = useState<{ employeeId: string; currentSeat?: string | null } | null>(null);
 
-  const workflowsQuery = useQuery({ queryKey: ["agent-command-workflows"], queryFn: getWorkflows, refetchInterval: 10000 });
+  const workflowsQuery = useQuery({
+    queryKey: ["agent-command-workflows"],
+    queryFn: getWorkflows,
+    refetchInterval: (query) => {
+      const list = query.state.data ?? [];
+      const hasActive = list.some(
+        (w) => w.status === "RUNNING" || w.status === "WAITING_APPROVAL"
+      );
+      return hasActive ? 10000 : false;
+    },
+    refetchOnWindowFocus: false,
+  });
   const workflows = useMemo(() => (workflowsQuery.data ?? []).slice(0, 30), [workflowsQuery.data]);
   const selectedFromList = selectedWorkflowId ?? workflows[0]?.workflow_id ?? null;
 

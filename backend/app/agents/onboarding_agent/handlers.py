@@ -7,7 +7,7 @@ from sqlalchemy import or_, select
 
 from app.agents.approval_agent.handlers import handler_registry
 from app.agents.employee_agent.tools import create_employee_draft, employee_display_name, employee_profile, find_one_employee
-from app.agents.onboarding_agent.service import audit_onboarding_action, onboarding_response
+from app.agents.onboarding_agent.service import audit_onboarding_action
 from app.db.session import SessionLocal
 from app.models.audit import AuditLog
 from app.models.employee import Department, Designation, Employee
@@ -68,14 +68,15 @@ def execute_onboarding_start(payload: dict[str, Any]) -> dict[str, Any]:
             "status": "executed",
             "message": "Onboarding approved. Employee, assets, document checklist, and notifications were generated.",
             "employee": employee_profile(employee),
-            "structured_response": onboarding_response(
-                title="Onboarding completed",
-                summary="Employee record was created and downstream onboarding tasks were generated.",
-                candidate=candidate_payload,
-                approval_request_id=None,
-                completed=True,
-                include_resume_step=bool(candidate.get("resume_uploaded")),
-            ),
+            "structured_response": {
+                "type": "onboarding_completed",
+                "title": "Onboarding completed",
+                "summary": "Employee record was created and downstream onboarding tasks were generated.",
+                "candidate": candidate_payload,
+                "approval_request_id": None,
+                "completed": True,
+                "include_resume_step": bool(candidate.get("resume_uploaded")),
+            },
         }
     finally:
         db.close()
