@@ -37,6 +37,39 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return apiRequest<T>(path, { method: "DELETE" });
 }
 
+// Downloads a file from an authenticated endpoint. A plain <a href download>
+// tag can't attach the Authorization header, so this fetches the file as a
+// blob (with auth + 401 refresh-retry, same as apiRequest) and triggers the
+// save via a temporary object URL instead.
+export async function apiDownloadFile(path: string, filename: string): Promise<void> {
+  const token = useAuthStore.getState().accessToken;
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  let response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (response.status === 401) {
+    const refreshedToken = await useAuthStore.getState().refreshSession();
+    if (refreshedToken) {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: { ...headers, Authorization: `Bearer ${refreshedToken}` },
+      });
+    }
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new ApiError(payload?.detail ?? `Download failed: ${response.status}`, response.status);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function apiRequest<T>(path: string, init: RequestInit): Promise<T> {
   const token = useAuthStore.getState().accessToken;
   const isFormData = init.body instanceof FormData;

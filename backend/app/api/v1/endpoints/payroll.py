@@ -476,7 +476,7 @@ def export_payroll_sheet(
         run.status = PayrollRunStatus.BANK_SHEET_GENERATED
         db.commit()
 
-    return {"filename": filename, "download_url": f"/api/v1/payroll/export/{filename}"}
+    return {"filename": filename, "download_url": f"/payroll/export/{filename}"}
 
 
 # ── Payroll Export Download ──────────────────────────────────────────────────
