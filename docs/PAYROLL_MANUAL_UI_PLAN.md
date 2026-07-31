@@ -1,74 +1,72 @@
-# Payroll Manual UI — Implementation Plan
+# Plan: Payroll Page — Manual Run UI
 
-**Repo:** `HRVIRTUAL` (`develop` branch)  
-**Last updated:** 2026-08-01
-
----
-
-## Problem
-
-Payroll generation / approval / export currently only works through the chat agent command interface (`AgentCommandPage`). The NL routing system is also broken — typing "process payroll for July" routes to the wrong agent due to a fragile keyword-matching elif ladder. Both issues mean payroll runs are effectively inaccessible.
-
-**Fix order:**
-1. **Phase 1 (this plan):** Build manual UI on `PayrollPage` — no agent command required. Fully REST-driven.
-2. **Phase 2 (separate plan):** Fix NL routing via TriageAgent redesign — see `docs/NL_AGENT_ARCHITECTURE_REDESIGN.md`.
+**Repo:** `D:\gunesh_dev\dev\temp\WorkingHRMS\HRVIRTUAL` (`develop` branch)  
+**Task:** Add manual payroll generation, approval and export to PayrollPage (no agent command needed)
 
 ---
 
-## Agent Command Status — BROKEN (Do Not Use)
+## Overall Completion: ~55%
 
-The chat agent command `"process payroll for July 2026"` currently routes incorrectly due to:
-- Fragile keyword elif ladder in `coordinator_agent/service.py` (`_analyze_intent`, lines 522–644)
-- Same issue in `agents/shared/natural_language.py`
-
-Until the TriageAgent redesign is implemented, **do not use agent commands for payroll**. Use the manual UI built by this plan instead.
-
-**Model / API key for TriageAgent (Phase 2):** Already wired in `app/core/config.py`:
-- `OPENAI_API_KEY` → `settings.openai_api_key`
-- `OPENAI_INTENT_MODEL` → `settings.openai_intent_model` (default: `gpt-4o-mini`)
-- `OPENAI_INTENT_ENABLED` → `settings.openai_intent_enabled`
-
-No new env vars needed for Phase 2.
-
----
-
-## What Already Exists (Reuse)
-
-| Component | File | Use |
+| Area | Status | Notes |
 |---|---|---|
-| `compute_payroll_run(db, month, year)` | `app/services/payroll_computation.py` | POST /runs |
-| `generate_employee_sheet(db, run, company)` | `app/services/payroll_export.py` | POST /runs/{id}/export |
-| `generate_consultant_sheet / generate_bank_sheet / generate_tds_sheet` | same | same |
-| `ApprovalEngineService(db).create_approval(...)` | `app/agents/approval_agent/service.py` | POST /runs/{id}/submit-approval |
-| `GET /payroll/export/{filename}` | `app/api/v1/endpoints/payroll.py` | Serves XLSX file downloads |
-| `PayrollRunCard` | `frontend/src/components/payroll/PayrollRunCard.tsx` | Renders run card with export buttons |
-| `PayrollExportDownload` | `frontend/src/components/payroll/PayrollExportDownload.tsx` | Renders download link after export |
-| `apiGet / apiPost` | `frontend/src/services/api.ts` | HTTP helpers — use same pattern as existing payroll.ts functions |
+| Computation engine (`compute_payroll_run`) | ✅ Done | `app/services/payroll_computation.py` |
+| Export services (`generate_*_sheet`) | ✅ Done | `app/services/payroll_export.py` |
+| Approval engine (`ApprovalEngineService`) | ✅ Done | `app/agents/approval_agent/service.py` |
+| `PayrollRun` / `PayrollRunItem` models | ✅ Done | `app/models/payroll/models.py` |
+| `metadata_json` column on `PayrollRun` | ✅ Done (model edit) | Migration still needed |
+| `PayrollRunCard` component | ✅ Done | `frontend/src/components/payroll/PayrollRunCard.tsx` |
+| `PayrollExportDownload` component | ✅ Done | `frontend/src/components/payroll/PayrollExportDownload.tsx` |
+| Salary masters CRUD (components/structures) | ✅ Done | 16 existing routes |
+| TriageAgent + SessionManager | ✅ Done | Akanksha pushed — NL routing redesign complete |
+| `openpyxl` in `requirements.txt` | ✅ Done | Added to `backend/requirements.txt` line 17 |
+| Migration `20260801_0036` | ❌ Missing | Adds `metadata_json` column to `payroll_runs` table |
+| 4 REST endpoints for payroll runs | ❌ Missing | GET /runs, POST /runs, submit-approval, export |
+| `payroll.ts` — 4 API functions | ❌ Missing | Replace dead comment block at end of file |
+| `PayrollPage.tsx` — PayrollRuns section | ❌ Missing | First section above Salary Structures |
+| NL agent command routing (chat flow) | 🔴 Broken | Known issue — TriageAgent fix pending, out of scope here |
 
-**Already done — no action needed:**
-- `CompanySettingsPanel` is already in `MastersPage.tsx` (Company Settings tab), not on PayrollPage.
-- Current alembic head: `20260731_0035` (conversation_sessions). New migration chains from this.
+---
+
+## Context
+
+Payroll generation/approval/export is currently agent-command only. No REST endpoints exist for payroll runs. User needs to generate sheets directly from the UI. The backend services (`compute_payroll_run`, `generate_*_sheet`) and the `PayrollRunCard` / `PayrollExportDownload` components are already built — only the 4 REST endpoints and frontend wiring are missing.
+
+**Already done (no action needed):**
+- `CompanySettingsPanel` is already on `MastersPage.tsx` (its own "Company Settings" tab) and is NOT on `PayrollPage.tsx` — no move required.
+- Current alembic head: `20260731_0035` (conversation_sessions). New migration must chain from this.
+- `metadata_json` column already added to `PayrollRun` model in `backend/app/models/payroll/models.py` — migration is the only remaining model step.
+
+---
+
+## What Exists (Reuse These)
+
+| Component | File | Reuse |
+|---|---|---|
+| `compute_payroll_run(db, month, year) → tuple[list[dict], list[str]]` | `app/services/payroll_computation.py` | Call from POST /runs |
+| `generate_employee_sheet(db, run, company) → str` | `app/services/payroll_export.py` | Call from POST /runs/{id}/export |
+| `generate_consultant_sheet / generate_bank_sheet / generate_tds_sheet` | same file | Same |
+| `ApprovalEngineService(db).create_approval(*, module_name, action_name, payload_json, approval_reason, requested_by, workflow_id)` | `app/agents/approval_agent/service.py` | Call from POST /runs/{id}/submit-approval |
+| `GET /payroll/export/{filename}` | `app/api/v1/endpoints/payroll.py` | Already serves XLSX downloads, reused by export download URL |
+| `PayrollRunCard` | `frontend/src/components/payroll/PayrollRunCard.tsx` | Drop in — props: `{runId, month: string, status, employeeCount, skipped?, exportsLocked, onExport, onSubmitApproval?}` |
+| `PayrollExportDownload` | `frontend/src/components/payroll/PayrollExportDownload.tsx` | Drop in — props: `{title, filename, downloadUrl}` |
+| `apiGet / apiPost` | `frontend/src/services/api.ts` | Used by all existing payroll.ts functions — use same pattern |
 
 ---
 
 ## Backend Changes
 
-### 1. `PayrollRun` model — add `metadata_json`
+### 1. Add `metadata_json` to `PayrollRun` model
 
 **File:** `backend/app/models/payroll/models.py`
 
-Add to `PayrollRun` class (after `approved_at`):
+Add one column to the `PayrollRun` class (after `approved_at`):
 ```python
 metadata_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 ```
 
-Stores `{"skipped": [...], "total_net_payable": 450000, "employee_count": 5}` at generation time. Avoids N+1 item queries on the list endpoint.
+Stores `{"skipped": [...], "total_net_payable": 450000, "employee_count": 5}` at generation time. This avoids N+1 item-count queries on list endpoint.
 
----
-
-### 2. Migration `20260801_0036_payroll_run_metadata.py`
-
-**File:** `backend/alembic/versions/20260801_0036_payroll_run_metadata.py`
+### 2. New migration `20260801_0036_payroll_run_metadata.py`
 
 ```python
 """payroll run metadata column
@@ -94,15 +92,13 @@ def downgrade():
     op.drop_column("payroll_runs", "metadata_json")
 ```
 
----
+### 3. New REST endpoints + helpers in `backend/app/api/v1/endpoints/payroll.py`
 
-### 3. New endpoints in `backend/app/api/v1/endpoints/payroll.py`
-
-#### New imports (merge into existing import block)
+#### New imports to add at the top of payroll.py
 ```python
-from typing import Literal                    # add to existing `from typing import Any`
-from pydantic import ConfigDict               # add to existing pydantic import
-from sqlalchemy import delete                 # add to existing sqlalchemy import
+from typing import Literal                          # add to existing `from typing import Any`
+from pydantic import ConfigDict                     # add to existing pydantic import
+from sqlalchemy import delete                       # add to existing sqlalchemy import
 from app.models.payroll.models import PayrollRun, PayrollRunItem, PayrollRunStatus
 from app.services.payroll_computation import compute_payroll_run
 from app.services.payroll_export import (
@@ -112,7 +108,7 @@ from app.services.payroll_export import (
 from app.agents.approval_agent.service import ApprovalEngineService
 ```
 
-#### New Pydantic schemas (add with other schemas near top of file)
+#### New Pydantic schemas (add near top with other schemas)
 ```python
 class PayrollRunCreateRequest(BaseModel):
     month: int = Field(ge=1, le=12)
@@ -157,7 +153,7 @@ def _run_to_summary(run: PayrollRun) -> PayrollRunSummary:
     )
 ```
 
-#### 4 new endpoints (add after existing `download_payroll_export`)
+#### 4 new endpoints (add after the existing `download_payroll_export` endpoint)
 
 **GET /payroll/runs**
 ```python
@@ -282,9 +278,9 @@ def export_payroll_sheet(
 
 ## Frontend Changes
 
-### 4. `frontend/src/services/payroll.ts` — add 4 functions
+### 4. Add to `frontend/src/services/payroll.ts`
 
-Replace the comment block at the bottom of the file with:
+Add these after the existing `getEmployeeTDSConfigs` function, replacing the comment block. Use the same `apiGet / apiPost` pattern as all existing functions:
 
 ```typescript
 export type PayrollRunSummary = {
@@ -315,38 +311,28 @@ export function exportPayrollSheet(runId: string, type: "employee" | "consultant
 }
 ```
 
----
+### 5. Update `frontend/src/pages/PayrollPage.tsx`
 
-### 5. `frontend/src/pages/PayrollPage.tsx` — add Payroll Runs section
+Add a **Payroll Runs** section as the FIRST section of the page (above Salary Structures / Components). The `PayrollRunCard` and `PayrollExportDownload` components exist — just import and wire them.
 
-Add as the **first section** of the page (before Salary Structures).
-
-#### New imports
+#### New imports to add
 ```typescript
 import { useQuery } from "@tanstack/react-query";
-import {
-  getPayrollRuns, generatePayrollRun, submitPayrollApproval,
-  exportPayrollSheet, PayrollRunSummary
-} from "@/services/payroll";
+import { getPayrollRuns, generatePayrollRun, submitPayrollApproval, exportPayrollSheet, PayrollRunSummary } from "@/services/payroll";
 import PayrollRunCard from "@/components/payroll/PayrollRunCard";
 import PayrollExportDownload from "@/components/payroll/PayrollExportDownload";
 ```
 
-#### New constants + state + handlers (inside component)
+#### New state + handlers (inside the component, alongside existing state)
 ```typescript
-const MONTH_NAMES = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December"
-];
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const MONTH_OPTIONS = MONTH_NAMES.map((label, i) => ({ value: i + 1, label }));
 const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
 const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
 const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 const [isGenerating, setIsGenerating] = useState(false);
-const [exportResults, setExportResults] = useState<
-  Record<string, { title: string; filename: string; download_url: string }>
->({});
+const [exportResults, setExportResults] = useState<Record<string, { title: string; filename: string; download_url: string }>>({});
 
 const { data: runs = [], refetch: refetchRuns } = useQuery({
   queryKey: ["payroll-runs"],
@@ -370,15 +356,12 @@ async function handleSubmitApproval(runId: string) {
 
 async function handleExport(runId: string, type: "employee" | "consultant" | "bank" | "tds") {
   const result = await exportPayrollSheet(runId, type);
-  const typeLabels = {
-    employee: "Employee Sheet", consultant: "Consultant Sheet",
-    bank: "Bank Sheet", tds: "TDS Sheet"
-  };
+  const typeLabels = { employee: "Employee Sheet", consultant: "Consultant Sheet", bank: "Bank Sheet", tds: "TDS Sheet" };
   setExportResults(prev => ({ ...prev, [runId]: { title: typeLabels[type], ...result } }));
 }
 ```
 
-#### New JSX section
+#### New JSX section (insert before the existing Salary Structures section)
 ```tsx
 <SectionCard title="Payroll Runs" icon={<FileSpreadsheet />}>
   <div className="flex items-center gap-3 mb-4">
@@ -396,9 +379,7 @@ async function handleExport(runId: string, type: "employee" | "consultant" | "ba
   </div>
 
   {runs.length === 0 ? (
-    <p className="text-sm text-muted-foreground">
-      No payroll runs yet. Select a month and click Generate.
-    </p>
+    <p className="text-sm text-muted-foreground">No payroll runs yet. Select a month and click Generate.</p>
   ) : (
     <div className="space-y-4">
       {runs.map(run => (
@@ -429,47 +410,33 @@ async function handleExport(runId: string, type: "employee" | "consultant" | "ba
 
 ---
 
+## Remaining Work (Ordered)
+
 ## Files to Change
 
 ```
 MODIFIED BACKEND:
-  backend/app/models/payroll/models.py              (+metadata_json on PayrollRun)
-  backend/app/api/v1/endpoints/payroll.py           (+imports, +3 schemas, +2 helpers, +4 endpoints)
+  backend/requirements.txt                          (DONE — openpyxl already added)
+  backend/app/models/payroll/models.py              (DONE — metadata_json already added)
+  backend/app/api/v1/endpoints/payroll.py           (+imports, +schemas, +2 helpers, +4 endpoints)
 
 NEW BACKEND:
   backend/alembic/versions/20260801_0036_payroll_run_metadata.py
 
 MODIFIED FRONTEND:
-  frontend/src/services/payroll.ts                  (+PayrollRunSummary type, +4 functions)
-  frontend/src/pages/PayrollPage.tsx                (+PayrollRuns section at top of page)
+  frontend/src/services/payroll.ts                  (+PayrollRunSummary type, +4 API functions, remove comment block)
+  frontend/src/pages/PayrollPage.tsx                (+PayrollRuns section at top)
 ```
 
 ---
 
-## Verification (Manual — No Agent Commands)
+## Verification
 
-**Backend (run server, use curl or Swagger UI at `/docs`):**
-- [ ] `alembic upgrade head` → confirms `20260801_0036` applied
-- [ ] `POST /api/v1/payroll/runs {"month":7,"year":2026}` → 200, status=DRAFT
-- [ ] `GET /api/v1/payroll/runs` → list includes the generated run
-- [ ] `POST /api/v1/payroll/runs/{id}/export {"type":"employee"}` → returns `{filename, download_url}`
-- [ ] `GET /api/v1/payroll/export/{filename}` → downloads XLSX
-- [ ] `POST /api/v1/payroll/runs/{id}/submit-approval` → status=PENDING_APPROVAL, row in `approval_requests`
-- [ ] `POST /api/v1/payroll/runs/{id}/export {"type":"bank"}` while DRAFT → 400 error
-
-**Frontend (manual browser):**
-- [ ] Payroll page — Payroll Runs section at top with month/year dropdowns + Generate button
-- [ ] Click Generate → run card appears with employee count + skipped list
-- [ ] Employee / Consultant / TDS sheet buttons → file downloads
-- [ ] Bank Sheet button locked while status=DRAFT
-- [ ] Submit for Approval → status badge changes to PENDING APPROVAL
-- [ ] After DB approval update → Bank Sheet unlocks and downloads
-
----
-
-## Phase 2: Fix Agent Command (Separate Work)
-
-Chat agent payroll commands will be fixed as part of the TriageAgent redesign.  
-See: `docs/NL_AGENT_ARCHITECTURE_REDESIGN.md`
-
-TriageAgent replaces the elif ladder with a single OpenAI tool-call (`gpt-4o-mini`, key from `OPENAI_API_KEY` env var) that classifies intent and maps it to the correct route. Once implemented, `"process payroll for July 2026"` will route correctly to `PayrollAgent` without affecting the manual UI built here.
+- [ ] `alembic upgrade head` — confirms `20260801_0036` applied, `metadata_json` column exists on `payroll_runs`
+- [ ] `POST /payroll/runs {month:7, year:2026}` → 200 with run summary JSON, `payroll_run_items` rows created in DB
+- [ ] `GET /payroll/runs` → list including the generated run with correct employee_count / skipped
+- [ ] Payroll page shows month/year picker + Generate button at top
+- [ ] Clicking Generate → run card appears with employee count + skipped names
+- [ ] Employee / Consultant / TDS sheet download works from DRAFT status
+- [ ] Bank sheet button disabled until approved (exportsLocked)
+- [ ] Submit for Approval → status changes to PENDING_APPROVAL, `approval_requests` row created in DB
