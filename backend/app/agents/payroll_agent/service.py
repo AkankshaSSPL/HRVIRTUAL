@@ -246,7 +246,7 @@ class PayrollAgent(BaseAgent):
                 "type": "payroll_export",
                 "title": title,
                 "filename": filename,
-                "download_url": f"/api/v1/payroll/export/{filename}",
+                "download_url": f"/payroll/export/{filename}",
             },
         }
 
