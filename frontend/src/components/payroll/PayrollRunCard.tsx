@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { useAgentTheme } from "@/lib/agent-theme";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui-system/StatusBadge";
-import { Download, FileSpreadsheet, CheckCircle, Clock } from "lucide-react";
+import { Download, FileSpreadsheet, CheckCircle, Clock, X } from "lucide-react";
 
 interface PayrollRunCardProps {
   runId: string;
@@ -13,6 +13,7 @@ interface PayrollRunCardProps {
   exportsLocked: boolean;
   onExport: (type: "employee" | "consultant" | "bank" | "tds") => void;
   onSubmitApproval?: () => void; // undefined hides the button
+  onDismiss?: () => void;
 }
 
 const STATUS_LABELS: Record<string, { label: string; tone: "success" | "warning" | "neutral" | "error" }> = {
@@ -32,6 +33,7 @@ export function PayrollRunCard({
   exportsLocked,
   onExport,
   onSubmitApproval,
+  onDismiss,
 }: PayrollRunCardProps) {
   const theme = useAgentTheme("payroll");
   const statusInfo = STATUS_LABELS[status] ?? { label: status, tone: "neutral" };
@@ -55,7 +57,18 @@ export function PayrollRunCard({
             <p className="text-xs text-muted-foreground">{employeeCount} employees processed</p>
           </div>
         </div>
-        <StatusBadge status={statusInfo.label} tone={statusInfo.tone} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={statusInfo.label} tone={statusInfo.tone} />
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted transition-colors"
+              title="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {skipped.length > 0 && (

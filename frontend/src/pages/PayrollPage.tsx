@@ -64,6 +64,7 @@ export function PayrollPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [exportResults, setExportResults] = useState<Record<string, { title: string; filename: string; download_url: string }>>({});
+  const [dismissedRuns, setDismissedRuns] = useState<Set<string>>(new Set());
 
   const componentsQuery = useQuery({ queryKey: ["payroll-components"], queryFn: getSalaryComponents });
   const components = componentsQuery.data ?? [];
@@ -310,7 +311,7 @@ export function PayrollPage() {
             <EmptyState title="No payroll runs yet" description="Select a month and year, then click Generate Payroll." />
           ) : (
             <div className="space-y-4">
-              {runs.map((run: PayrollRunSummary) => (
+              {runs.filter((run: PayrollRunSummary) => !dismissedRuns.has(run.id)).map((run: PayrollRunSummary) => (
                 <div key={run.id} className="space-y-3">
                   <PayrollRunCard
                     runId={run.id}
@@ -321,6 +322,7 @@ export function PayrollPage() {
                     exportsLocked={!["APPROVED", "BANK_SHEET_GENERATED", "COMPLETED"].includes(run.status)}
                     onExport={(type) => exportRunMutation.mutate({ runId: run.id, type })}
                     onSubmitApproval={run.status === "DRAFT" ? () => submitApprovalMutation.mutate(run.id) : undefined}
+                    onDismiss={() => setDismissedRuns((prev) => new Set(prev).add(run.id))}
                   />
                   {exportResults[run.id] ? (
                     <PayrollExportDownload
