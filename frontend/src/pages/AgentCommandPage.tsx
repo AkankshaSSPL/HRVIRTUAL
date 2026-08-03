@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bot, CheckCircle2, ChevronRight, ShieldCheck, SlidersHorizontal, Sparkles } from "lucide-react";
@@ -909,6 +909,7 @@ export function AgentCommandPage() {
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const isDebugMode = Boolean(currentUser?.is_superuser);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [uploadingResume, setUploadingResume] = useState(false);
@@ -1080,6 +1081,10 @@ export function AgentCommandPage() {
   );
 
   useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conversationMessages, pendingCommand, commandMutation.isPending, uploadingResume]);
+
+  useEffect(() => {
     const state = location.state as { draftCommand?: string } | null;
     if (!state?.draftCommand) return;
     setCommandDraft(state.draftCommand);
@@ -1223,6 +1228,7 @@ export function AgentCommandPage() {
                 </div>
               </AgentMessageBubble>
             ) : null}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="sticky bottom-0 border-t bg-background/95 py-4 backdrop-blur">

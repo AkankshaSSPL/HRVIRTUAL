@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2, Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,22 @@ export function PayrollPage() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [exportResults, setExportResults] = useState<Record<string, { title: string; filename: string; download_url: string }>>({});
-  const [dismissedRuns, setDismissedRuns] = useState<Set<string>>(new Set());
+  const [dismissedRunsState, setDismissedRunsState] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem("dismissedPayrollRuns");
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const dismissedRuns = dismissedRunsState;
+  const setDismissedRuns = (updater: (prev: Set<string>) => Set<string>) => {
+    setDismissedRunsState((prev) => {
+      const next = updater(prev);
+      localStorage.setItem("dismissedPayrollRuns", JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
 
   const componentsQuery = useQuery({ queryKey: ["payroll-components"], queryFn: getSalaryComponents });
   const components = componentsQuery.data ?? [];
@@ -82,11 +97,27 @@ export function PayrollPage() {
 
   const generateRunMutation = useMutation({
     mutationFn: () => generatePayrollRun(selectedMonth, selectedYear),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       setRunError(null);
+      setDismissedRuns((prev) => {
+        const next = new Set(prev);
+        next.delete(data.id);
+        return next;
+      });
     },
-    onError: (error) => setRunError(error instanceof Error ? error.message : "Unable to generate payroll run."),
+    onError: (error) => {
+      const msg = error instanceof Error ? error.message : "Unable to generate payroll run.";
+      setRunError(msg);
+      const existing = runs.find((r: PayrollRunSummary) => r.month === selectedMonth && r.year === selectedYear);
+      if (existing) {
+        setDismissedRuns((prev) => {
+          const next = new Set(prev);
+          next.delete(existing.id);
+          return next;
+        });
+      }
+    },
   });
 
   const submitApprovalMutation = useMutation({
@@ -303,7 +334,32 @@ export function PayrollPage() {
             </Button>
           </div>
 
-          {runError ? <p className="mb-4 text-sm text-destructive">{runError}</p> : null}
+          {runError ? (
+            <div className="mb-4 space-y-3 rounded-md border border-destructive/20 bg-destructive/5 p-3">
+              <p className="text-sm text-destructive">{runError}</p>
+              {runError.includes("BANK_SHEET_GENERATED") && runs.find((r: PayrollRunSummary) => r.month === selectedMonth && r.year === selectedYear) ? (() => {
+                const existing = runs.find((r: PayrollRunSummary) => r.month === selectedMonth && r.year === selectedYear)!;
+                return exportResults[existing.id] && exportResults[existing.id].title === "Bank Sheet" ? (
+                  <PayrollExportDownload
+                    title={exportResults[existing.id].title}
+                    filename={exportResults[existing.id].filename}
+                    downloadUrl={exportResults[existing.id].download_url}
+                  />
+                ) : (
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="bg-background"
+                    onClick={() => exportRunMutation.mutate({ runId: existing.id, type: "bank" })}
+                    disabled={exportRunMutation.isPending}
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    {exportRunMutation.isPending ? "Preparing..." : "Get Bank Sheet"}
+                  </Button>
+                );
+              })() : null}
+            </div>
+          ) : null}
 
           {runsQuery.isLoading ? (
             <LoadingSkeleton rows={3} />

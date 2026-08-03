@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import calendar
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -119,7 +120,8 @@ def _compute_fulltime(db: Session, employee: Employee, config: PayrollConfig, mo
     if not employee.bank_account_number or not employee.ifsc_code:
         return None
 
-    target_date = date(year, month, 1)
+    _, last_day = calendar.monthrange(year, month)
+    target_date = date(year, month, last_day)
     assignment = get_active_assignment(db, employee.id, target_date)
     if not assignment:
         return None
