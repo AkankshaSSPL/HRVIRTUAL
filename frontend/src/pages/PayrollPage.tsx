@@ -6,7 +6,7 @@ import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2, Download } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DataTable, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
-import { PayrollConfigPanel } from "@/components/payroll/PayrollConfigPanel";
+import { SalaryStructureModal } from "@/components/payroll/SalaryStructureModal";
 import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
 import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
 import {
@@ -56,6 +56,7 @@ const defaultFormState: SalaryComponentForm = {
 export function PayrollPage() {
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
+  const [structureModalOpen, setStructureModalOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<SalaryComponentRecord | null>(null);
   const [deletingComponent, setDeletingComponent] = useState<SalaryComponentRecord | null>(null);
   const [formState, setFormState] = useState<SalaryComponentForm>(defaultFormState);
@@ -511,7 +512,13 @@ export function PayrollPage() {
 
         {!structuresQuery.isLoading && !structuresQuery.isError ? (
           <SectionCard>
-            <h3 className="mb-4 text-lg font-semibold">Salary Structures</h3>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Salary Structures</h3>
+              <Button size="sm" onClick={() => setStructureModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                New Structure
+              </Button>
+            </div>
             <DataTable
               data={structures}
               columns={structureColumns}
@@ -549,7 +556,7 @@ export function PayrollPage() {
           </SectionCard>
         ) : null}
 
-        <PayrollConfigPanel />
+        <SalaryStructureModal open={structureModalOpen} onOpenChange={setStructureModalOpen} />
 
         {formError && !formOpen ? <div className="fixed bottom-6 right-6 z-50"><ToastNotification title="Salary component action failed" description={formError} type="error" /></div> : null}
         <ConfirmDialog

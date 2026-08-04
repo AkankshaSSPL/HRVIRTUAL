@@ -410,7 +410,7 @@ def _attendance_cell(employee: Employee, current_day: date, record: AttendanceRe
             "count": 1,
             "source": record.source or "attendance",
         }
-    return _virtual_cell(employee, current_day, "MISSING", "Missing Attendance", "default")
+    return _virtual_cell(employee, current_day, "PRESENT", "Present", "default")
 
 
 def _virtual_cell(employee: Employee, current_day: date, status: str, label: str, source: str) -> dict[str, Any]:

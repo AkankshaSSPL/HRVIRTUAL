@@ -59,17 +59,17 @@ def calculate_lop(db: Session, *, employee_id: UUID, month: int, year: int) -> L
         )
     )
 
-    working_days = 0.0
-    present_days = 0.0
+    days_in_month = calendar.monthrange(year, month)[1]
+    working_days = sum(1 for day in range(1, days_in_month + 1) if date(year, month, day).weekday() < 5)
+    
+    absent_days = 0.0
+    half_days = 0.0
     for record in attendance:
         status = str(record.status)
-        if status in {AttendanceStatus.WEEKLY_OFF, AttendanceStatus.HOLIDAY}:
-            continue
-        working_days += 1
-        if status in {AttendanceStatus.PRESENT, AttendanceStatus.WORK_FROM_HOME, AttendanceStatus.ON_DUTY}:
-            present_days += 1
+        if status == AttendanceStatus.ABSENT:
+            absent_days += 1
         elif status == AttendanceStatus.HALF_DAY:
-            present_days += 0.5
+            half_days += 1
 
     paid_leave_days = 0.0
     unpaid_leave_days = 0.0
@@ -83,11 +83,8 @@ def calculate_lop(db: Session, *, employee_id: UUID, month: int, year: int) -> L
         elif category == LeaveCategory.PAID:
             paid_leave_days += days
 
-    if not working_days:
-        days_in_month = calendar.monthrange(year, month)[1]
-        working_days = sum(1 for day in range(1, days_in_month + 1) if date(year, month, day).weekday() < 5)
-
-    lop_days = max(0.0, working_days - present_days - paid_leave_days) + unpaid_leave_days
+    lop_days = absent_days + (0.5 * half_days) + unpaid_leave_days
+    present_days = max(0.0, working_days - lop_days - paid_leave_days)
     return LOPResult(
         employee_id=str(employee_id),
         working_days=working_days,
