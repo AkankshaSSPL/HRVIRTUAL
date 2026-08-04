@@ -61,44 +61,78 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
     ws = wb.active
     ws.title = "Employee Salary Sheet"
     ws.append([company.company_name])
-    ws.append([f"Employee Salary Sheet — {_month_label(payroll_run.month, payroll_run.year)}"])
+    month_str = calendar.month_name[payroll_run.month]
+    year_str = str(payroll_run.year)
+    ws.append([f"Employee sheet month of {month_str} {year_str}"])
     ws.append([])
+    
     headers = [
-        "Employee", "Employee Code", "Structure", "Days Worked", "Working Days",
-        "Gross Salary", "BASIC", "HRA", "CONVEYANCE", "EDUCATION", "MEDICAL",
-        "EMPLOYER_PF", "EPF", "PROFESSIONAL_TAX", "TDS",
-        "Gross Earnings", "Total Deductions", "Net Salary",
-        "Bank Account", "IFSC",
+        "Sr.No", "Employee Name", "Days/Worked", "CTC", "BASIC", "HRA", "C.A", "EDU.A.", "MED. A", 
+        "Employer PF", "WAGES", "E.P.F.12 % ON WAGES", "VPF", f"{month_str} arrears PAY".upper(), "Extra Pay", 
+        "P.T.", "TDS", "Insu Pre", "Sponsored and self Ded", "Advance Ded", "Total Ded", "Net", 
+        "Previous salary", "remark Hiked by", "Payable as updated Tax", "Deduction Pending", "TAX note"
     ]
     ws.append(headers)
 
-    for item in items:
+    totals = { "CTC": 0, "BASIC": 0, "HRA": 0, "CA": 0, "EDU": 0, "MED": 0, "EmployerPF": 0, "WAGES": 0, "EPF": 0, "PT": 0, "TDS": 0, "TotalDed": 0, "Net": 0 }
+
+    for idx, item in enumerate(items, 1):
         bd = item.breakdown_json or {}
         earnings = bd.get("earnings", {})
         deductions = bd.get("statutory_deductions", {})
         employer = bd.get("employer_contributions", {})
+        
+        epf_val = deductions.get("EPF", 0)
+        # Attempt to reverse calculate EPF Wages
+        wages = round(epf_val / 0.12) if epf_val else 0
+        
         ws.append([
+            idx,
             _employee_name(item),
-            item.employee.employee_code if item.employee else "",
-            bd.get("salary_structure_code", ""),
             bd.get("days_worked", ""),
-            bd.get("working_days", ""),
-            bd.get("gross_salary", ""),
+            bd.get("gross_salary", 0),
             earnings.get("BASIC", 0),
             earnings.get("HRA", 0),
             earnings.get("CONVEYANCE", 0),
             earnings.get("EDUCATION", 0),
             earnings.get("MEDICAL", 0),
             employer.get("EMPLOYER_PF", 0),
-            deductions.get("EPF", 0),
+            wages,
+            epf_val,
+            0, # VPF
+            0, # arrears
+            0, # extra pay
             deductions.get("PROFESSIONAL_TAX", 0),
             deductions.get("TDS", 0),
-            bd.get("gross_earnings", ""),
-            bd.get("total_deductions", ""),
-            bd.get("net_salary", ""),
-            item.bank_account_number,
-            item.ifsc_code,
+            0, # insu pre
+            0, # sponsored
+            0, # advance ded
+            bd.get("total_deductions", 0),
+            bd.get("net_salary", 0),
+            "", "", "", "", ""
         ])
+        totals["CTC"] += bd.get("gross_salary", 0)
+        totals["BASIC"] += earnings.get("BASIC", 0)
+        totals["HRA"] += earnings.get("HRA", 0)
+        totals["CA"] += earnings.get("CONVEYANCE", 0)
+        totals["EDU"] += earnings.get("EDUCATION", 0)
+        totals["MED"] += earnings.get("MEDICAL", 0)
+        totals["EmployerPF"] += employer.get("EMPLOYER_PF", 0)
+        totals["WAGES"] += wages
+        totals["EPF"] += epf_val
+        totals["PT"] += deductions.get("PROFESSIONAL_TAX", 0)
+        totals["TDS"] += deductions.get("TDS", 0)
+        totals["TotalDed"] += bd.get("total_deductions", 0)
+        totals["Net"] += bd.get("net_salary", 0)
+
+    # Total Row
+    ws.append([
+        "Total", "", "", 
+        totals["CTC"], totals["BASIC"], totals["HRA"], totals["CA"], totals["EDU"], totals["MED"],
+        totals["EmployerPF"], totals["WAGES"], totals["EPF"], 0, 0, 0,
+        totals["PT"], totals["TDS"], 0, 0, 0, totals["TotalDed"], totals["Net"],
+        "", "", "", "", ""
+    ])
 
     filename = _new_filename("employee", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)
@@ -112,31 +146,41 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
     wb = Workbook()
     ws = wb.active
     ws.title = "Consultant Sheet"
+    
+    month_str = calendar.month_name[payroll_run.month]
+    year_str = str(payroll_run.year)
+    
     ws.append([company.company_name])
-    ws.append([f"Consultant Sheet — {_month_label(payroll_run.month, payroll_run.year)}"])
+    ws.append([f"Consultant Sheet — {month_str} {year_str}"])
     ws.append([])
-    ws.append([
-        "Consultant", "PAN", "Monthly Fee", "Days Worked", "Base Days",
-        "Leave Deduction", "Extra Working Pay", "Actual Pay",
-        "TDS Rate", "TDS", "Net Salary", "Bank Account", "IFSC",
-    ])
+    
+    headers = [
+        "SR NO", "CONSULTANT'S NAME", f"{month_str} PAY", "Worked Days", f"{month_str[:3].upper()} arrears PAY", 
+        "LEAVE DEDUCTION", "Advance Deduction", "EXTRA WORKING PAYMENT", "INSURANCE PRIMIUM", 
+        "ACTUAL PAY", "SGST 9%", "CGST 9%", "TDS", "Insurance TDS Deduction", "NET PAY", 
+        "Previous salary", "remark Hiked by"
+    ]
+    ws.append(headers)
 
-    for item in items:
+    for idx, item in enumerate(items, 1):
         bd = item.breakdown_json or {}
         ws.append([
+            idx,
             _employee_name(item),
-            item.employee.pan_number if item.employee else "",
-            bd.get("monthly_fee", ""),
+            bd.get("monthly_fee", 0),
             bd.get("days_worked", ""),
-            bd.get("base_working_days", ""),
-            bd.get("leave_deduction", ""),
-            bd.get("extra_working_pay", ""),
-            bd.get("actual_pay", ""),
-            bd.get("tds_rate", ""),
-            bd.get("tds", ""),
-            bd.get("net_salary", ""),
-            item.bank_account_number,
-            item.ifsc_code,
+            0, # arrears PAY
+            bd.get("leave_deduction", 0),
+            0, # advance ded
+            bd.get("extra_working_pay", 0),
+            0, # insurance premium
+            bd.get("actual_pay", 0),
+            0, # SGST
+            0, # CGST
+            bd.get("tds", 0),
+            0, # Insurance TDS
+            bd.get("net_salary", 0),
+            "", ""
         ])
 
     filename = _new_filename("consultant", payroll_run.month, payroll_run.year)
@@ -145,24 +189,40 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
 
 
 def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
-    """Bank upload sheet — all employees, debit account from CompanySettings."""
+    """Bank upload sheet — matching provided formatting."""
     items = _load_items_with_employees(db, payroll_run)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Bank Sheet"
-    ws.append([f"Debit Account: {company.payroll_bank_account or ''} ({company.payroll_bank_name or ''})"])
-    ws.append([f"Bank Sheet — {_month_label(payroll_run.month, payroll_run.year)}"])
-    ws.append([])
-    ws.append(["Employee", "Employee Code", "Bank Account", "IFSC", "Net Salary"])
+    
+    headers = [
+        "Debit account", "Beneficiary Ac No", "Beneficiary Name", "Amt", "Pay Mod", 
+        "Date of Payment", "IFSC", "Payable Lo", "Print Loca", "Bene Mobile No.", 
+        "Bene Ema", "Bene add1", "Bene add2", "Bene add3", "Bene add4", 
+        "Add Detai1", "Add Detai2", "Add Detai3", "Add Detai4", "Add Detai5", "Remarks"
+    ]
+    ws.append(headers)
+
+    month_str = calendar.month_name[payroll_run.month]
+    year_str = str(payroll_run.year)
+    default_remark = f"Salary For {month_str} {year_str}"
+    debit_account = company.payroll_bank_account or ""
 
     for item in items:
         ws.append([
+            debit_account,
+            item.bank_account_number or "",
             _employee_name(item),
-            item.employee.employee_code if item.employee else "",
-            item.bank_account_number,
-            item.ifsc_code,
             item.net_salary,
+            "N", # Pay Mod
+            "", # Date of Payment
+            item.ifsc_code or "",
+            "", "", # Payable Lo, Print Loca
+            item.employee.phone if item.employee else "", # Bene Mobile No.
+            "", "", "", "", "", # Bene Ema, add1, add2, add3, add4
+            "", "", "", "", "", # Add Detai1-5
+            default_remark # Remarks
         ])
 
     filename = _new_filename("bank", payroll_run.month, payroll_run.year)
@@ -171,38 +231,89 @@ def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySe
 
 
 def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
-    """Two tabs — Employee TDS and Consultant TDS — with PAN for consultants."""
+    """Two tabs — Employee TDS and Consultant TDS — matching specific formats."""
     items = _load_items_with_employees(db, payroll_run)
     employee_items = [i for i in items if (i.breakdown_json or {}).get("employment_type") == "FULL_TIME"]
     consultant_items = [i for i in items if (i.breakdown_json or {}).get("employment_type") == "CONSULTANT"]
 
     wb = Workbook()
+    
+    month_str = calendar.month_name[payroll_run.month]
+    year_str = str(payroll_run.year)
+    
+    # --- 1. Employee TDS Tab ---
     ws1 = wb.active
     ws1.title = "Employee TDS"
-    ws1.append([company.company_name])
-    ws1.append([f"Employee TDS — {_month_label(payroll_run.month, payroll_run.year)}"])
+    ws1.append([f"TDS Details Of Employee {month_str} {year_str}"])
     ws1.append([])
-    ws1.append(["Employee", "PAN", "TDS"])
-    for item in employee_items:
+    ws1.append([
+        "SR. NO.", "NAME OF THE DIRECTORS & EMPLOYEE", "GROSS PAY", "EXTRA WORKING DAYS", "EXTRA WORKING Pay", 
+        "TDS Difference Ded", f"{month_str} arrears PAY", "Extra Pay", "Prof.Tax.", "P.F.", "ADV DED", "Insu Pre", 
+        "EPF", "LEAVE", "TDS", "Net PAY"
+    ])
+    
+    emp_tds_total = 0
+    for idx, item in enumerate(employee_items, 1):
         bd = item.breakdown_json or {}
+        deductions = bd.get("statutory_deductions", {})
+        employer = bd.get("employer_contributions", {})
+        tds_val = deductions.get("TDS", 0)
+        emp_tds_total += tds_val
         ws1.append([
+            idx,
             _employee_name(item),
-            item.employee.pan_number if item.employee else "",
-            (bd.get("statutory_deductions", {}) or {}).get("TDS", 0),
+            bd.get("gross_salary", 0),
+            0, 0, 0, 0, 0, # extra/arrears
+            deductions.get("PROFESSIONAL_TAX", 0),
+            employer.get("EMPLOYER_PF", 0),
+            0, 0, # adv/insu
+            deductions.get("EPF", 0),
+            0, # leave
+            tds_val,
+            bd.get("net_salary", 0)
         ])
-
+    
+    ws1.append([])
+    ws1.append(["", f"Total TDS of Employee =", f"₹ {emp_tds_total}"])
+    
+    # --- 2. Consultant TDS Tab ---
     ws2 = wb.create_sheet("Consultant TDS")
-    ws2.append([company.company_name])
-    ws2.append([f"Consultant TDS — {_month_label(payroll_run.month, payroll_run.year)}"])
+    next_month = (payroll_run.month % 12) + 1
+    next_year = payroll_run.year + (1 if next_month == 1 else 0)
+    next_month_str = calendar.month_name[next_month]
+    
+    ws2.append([f"CONSULTANCY FEES {month_str} {year_str}, PAID IN THE MONTH of {next_month_str} {next_year}"])
     ws2.append([])
-    ws2.append(["Consultant", "PAN", "TDS"])
-    for item in consultant_items:
+    ws2.append([
+        "Sr. No", "CONSULTANTS' NAME", f"{month_str} PAY", "Previous Pay", "CGST 9%", "SGST 9%", 
+        "arrears PAY", f"{month_str} TDS", "NET PAY", "Remark"
+    ])
+    
+    cons_tds_total = 0
+    for idx, item in enumerate(consultant_items, 1):
         bd = item.breakdown_json or {}
+        tds_val = bd.get("tds", 0)
+        cons_tds_total += tds_val
         ws2.append([
+            idx,
             _employee_name(item),
-            item.employee.pan_number if item.employee else "",
-            bd.get("tds", 0),
+            bd.get("actual_pay", 0), # assuming actual pay includes leave ded
+            "", # prev pay
+            0, 0, 0, # cgst, sgst, arrears
+            tds_val,
+            bd.get("net_salary", 0),
+            "" # remark
         ])
+        
+    ws2.append([])
+    ws2.append(["", "TDS of consultant", f"₹ {cons_tds_total}"])
+    ws2.append([])
+    
+    # Office Rent Section
+    ws2.append(["", "", f"{month_str} PAY", "CGST 9%", "SGST 9%", "", "TDS", "NET PAY"])
+    ws2.append(["", "Office Rent", 0, 0, 0, "", 0, 0])
+    ws2.append([])
+    ws2.append(["", "TDS of Consultant + TDS for Office Rent =", f"₹ {cons_tds_total}"])
 
     filename = _new_filename("tds", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)
