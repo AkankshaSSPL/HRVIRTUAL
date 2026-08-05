@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import math
 import calendar
+import math
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -9,10 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.employee import Employee
-from app.models.employee.models import EmploymentStatus, EmploymentType
+from app.models.employee.models import EmploymentStatus
 from app.models.payroll import (
     EmployeeSalaryAssignment,
     EmployeeTDSConfig,
+    PayType,
+    PayTypeRule,
     PayrollConfig,
     SalaryAssignmentStatus,
     SalaryComponent,
@@ -21,9 +23,7 @@ from app.models.payroll import (
 from app.services.payroll_config_service import PayrollConfigService
 from app.services.payroll_preparation_service import prepare_employee_payroll_input
 
-# Employment statuses that still get paid. EXITED and SUSPENDED are skipped.
-# This is a judgment call, not something confirmed against your data — flag
-# if PROBATION/NOTICE_PERIOD employees should be handled differently.
+# Employment statuses that still get paid.
 PAYROLL_ELIGIBLE_STATUSES = {
     EmploymentStatus.ACTIVE,
     EmploymentStatus.PROBATION,
@@ -73,9 +73,7 @@ def get_component(db: Session, component_code: str) -> SalaryComponent | None:
 
 
 def get_monthly_tds(db: Session, employee_id, month: int, year: int) -> Decimal:
-    """Reads EmployeeTDSConfig for the financial year. Returns 0 if no config
-    exists — HR must add this manually when the CA provides workings; it is
-    never auto-calculated."""
+    """Reads EmployeeTDSConfig for the financial year. Returns 0 if no config exists."""
     fy_start = year if month >= 4 else year - 1
     financial_year = f"{fy_start}-{str(fy_start + 1)[-2:]}"
     config = db.scalar(
@@ -92,18 +90,14 @@ def get_monthly_tds(db: Session, employee_id, month: int, year: int) -> Decimal:
 
 
 def evaluate_component(item, component: SalaryComponent, resolved: dict, gross: float) -> float:
-    """Evaluate a SalaryStructureItem to a rupee amount.
-    FIXED      -> calculation_value
-    PERCENTAGE -> (reference_component or gross) * calculation_value / 100
-    FORMULA    -> eval() against `resolved`, no builtins, GROSS/CTC aliases
-    """
+    """Evaluate a SalaryStructureItem to a rupee amount."""
     calc_type = (item.calculation_type or component.calculation_type or "").upper()
     val = float(item.calculation_value if item.calculation_value is not None else (component.calculation_value or 0))
     ref = item.reference_component_code or component.reference_component_code
 
     if calc_type == "FIXED":
         return val
-    if calc_type == "PERCENTAGE":
+    if calc_type in ("PERCENTAGE", "PERCENT_OF"):
         base = resolved.get(ref, gross) if ref else gross
         return base * (val / 100.0)
     if calc_type == "FORMULA":
@@ -116,125 +110,216 @@ def evaluate_component(item, component: SalaryComponent, resolved: dict, gross: 
     return 0.0
 
 
-def _compute_fulltime(db: Session, employee: Employee, config: PayrollConfig, month: int, year: int) -> dict | None:
+def evaluate_pay_type_rule(
+    rule: PayTypeRule,
+    resolved: dict,
+    gross: float,
+    config: PayrollConfig,
+    employee: Employee,
+    db: Session,
+    month: int,
+    year: int,
+    days_worked: float,
+    base_days: float,
+) -> float:
+    """Evaluates dynamic pay type rules including fixed, percent, formula, statutory, and leave handlers."""
+    calc_type = (rule.calc_type or "").upper()
+    val = float(rule.value) if rule.value is not None else 0.0
+
+    if calc_type == "FIXED":
+        return val if val != 0.0 else gross
+    if calc_type == "PERCENT_OF":
+        base = resolved.get(rule.reference_code, gross) if rule.reference_code else gross
+        return base * (val / 100.0)
+    if calc_type == "FORMULA":
+        formula = rule.formula or ""
+        safe_env = {**resolved, "GROSS": gross, "CTC": gross}
+        try:
+            return float(eval(formula, {"__builtins__": {}}, safe_env))  # noqa: S307
+        except Exception:
+            return 0.0
+
+    # Dynamic statutory handlers
+    if calc_type == "STATUTORY_EPF":
+        basic = float(resolved.get("BASIC", 0))
+        epf_wages = min(basic, float(config.epf_wage_cap))
+        return float(_rupee(epf_wages * float(config.epf_employee_rate)))
+
+    if calc_type == "STATUTORY_PT":
+        basic = float(resolved.get("BASIC", 0))
+        return float(PayrollConfigService(db).get_professional_tax(basic))
+
+    if calc_type == "STATUTORY_TDS":
+        return float(get_monthly_tds(db, employee.id, month, year))
+
+    if calc_type == "LEAVE_DEDUCTION":
+        if days_worked < base_days:
+            return float(_rupee(gross * (base_days - days_worked) / base_days))
+        return 0.0
+
+    if calc_type == "FLAT_TDS":
+        tds_rate = val / 100.0 if val > 0 else float(config.consultant_tds_rate)
+        leave_deduction = resolved.get("LEAVE_DEDUCTION", 0.0)
+        actual_pay = gross - leave_deduction
+        return float(_floor_rupee(actual_pay * tds_rate))
+
+    return 0.0
+
+
+def compute_employee_payroll(db: Session, employee: Employee, config: PayrollConfig, month: int, year: int) -> dict | None:
     if not employee.bank_account_number or not employee.ifsc_code:
         return None
 
+    # Retrieve matching PayType master
+    emp_type_code = employee.employment_type or "FULL_TIME"
+    pay_type = db.scalar(
+        select(PayType).where(PayType.code == emp_type_code, PayType.active == True, PayType.deleted_at.is_(None))
+    )
+
     _, last_day = calendar.monthrange(year, month)
     target_date = date(year, month, last_day)
-    assignment = get_active_assignment(db, employee.id, target_date)
-    if not assignment:
-        return None
 
-    structure = db.get(SalaryStructure, assignment.salary_structure_id)
-    if not structure:
-        return None
-    items = sorted(structure.items, key=lambda x: x.sort_order)
-    gross = float(assignment.gross_salary)
-
-    resolved: dict = {"CTC": gross, "GROSS": gross}
-    earnings: dict[str, float] = {}
-    employer_contribs: dict[str, float] = {}
-    for item in items:
-        component = get_component(db, item.component_code)
-        if not component:
-            continue
-        raw = evaluate_component(item, component, resolved, gross)
-        resolved[item.component_code] = raw
-        comp_type = (component.type or "").upper()
-        if comp_type == "EARNING":
-            earnings[item.component_code] = raw
-        elif comp_type == "EMPLOYER_CONTRIBUTION":
-            employer_contribs[item.component_code] = _rupee(raw)
-
-    # Pro-rating via the real LOP/attendance service, not an invented query.
+    # Determine base working days & LOP input
     lop_input = prepare_employee_payroll_input(db, employee_id=employee.id, month=month, year=year)
-    working_days = lop_input["working_days"] or config.employee_base_working_days
-    lop_days = lop_input["lop_days"]
-    days_worked = max(0.0, working_days - lop_days)
-    ratio = (days_worked / working_days) if working_days else 1.0
+    if pay_type and pay_type.proration_basis == "FIXED_BASE_DAYS":
+        base_days = float(pay_type.base_working_days or config.consultant_base_working_days)
+    else:
+        base_days = float(lop_input["working_days"] or config.employee_base_working_days)
 
-    earnings = {code: _rupee(value * ratio) for code, value in earnings.items()}
+    lop_days = float(lop_input["lop_days"])
+    days_worked = max(0.0, base_days - lop_days)
+    ratio = (days_worked / base_days) if base_days else 1.0
 
-    basic = float(earnings.get("BASIC", 0))
-    epf_wages = min(basic, float(config.epf_wage_cap))
-    epf = _rupee(epf_wages * float(config.epf_employee_rate))
-    employer_pf = _rupee(epf_wages * float(config.epf_employer_rate))
-    professional_tax = PayrollConfigService(db).get_professional_tax(basic)
-    tds = int(get_monthly_tds(db, employee.id, month, year))
+    # Branch structure resolution based on pay_basis
+    pay_basis = pay_type.pay_basis if pay_type else ("FLAT_FEE" if emp_type_code == "CONSULTANT" else "STRUCTURE")
 
-    gross_earnings = sum(earnings.values())
-    total_deductions = epf + professional_tax + tds
+    resolved: dict = {}
+    earnings: dict[str, float] = {}
+    deductions: dict[str, float] = {}
+    employer_contribs: dict[str, float] = {}
+    structure_code = None
+
+    if pay_basis == "STRUCTURE":
+        assignment = get_active_assignment(db, employee.id, target_date)
+        if not assignment:
+            return None
+        structure = db.get(SalaryStructure, assignment.salary_structure_id)
+        if not structure:
+            return None
+
+        structure_code = structure.code
+        gross = float(assignment.gross_salary)
+        resolved["CTC"] = gross
+        resolved["GROSS"] = gross
+
+        # Process standard salary structure items
+        items = sorted(structure.items, key=lambda x: x.sort_order)
+        for item in items:
+            component = get_component(db, item.component_code)
+            if not component:
+                continue
+            raw = evaluate_component(item, component, resolved, gross)
+            prorated_val = _rupee(raw * ratio)
+            resolved[item.component_code] = prorated_val
+            
+            comp_type = (component.type or "").upper()
+            if comp_type == "EARNING":
+                earnings[item.component_code] = prorated_val
+            elif comp_type == "EMPLOYER_CONTRIBUTION":
+                employer_contribs[item.component_code] = prorated_val
+
+        # Employer PF contribution
+        basic = float(earnings.get("BASIC", 0))
+        epf_wages = min(basic, float(config.epf_wage_cap))
+        employer_pf = _rupee(epf_wages * float(config.epf_employer_rate))
+        employer_contribs["EMPLOYER_PF"] = employer_pf
+
+    else:  # FLAT_FEE basis
+        if not employee.current_salary:
+            return None
+        gross = float(employee.current_salary)
+        resolved["CTC"] = gross
+        resolved["GROSS"] = gross
+        resolved["MONTHLY_FEE"] = gross
+
+    # Apply configured PayType rules in order
+    rules = sorted(pay_type.rules, key=lambda r: r.sequence) if pay_type else []
+    
+    # Process dynamic rules
+    for rule in rules:
+        val = evaluate_pay_type_rule(rule, resolved, gross, config, employee, db, month, year, days_worked, base_days)
+        if rule.prorate:
+            val = _rupee(val * ratio)
+        resolved[rule.code] = val
+
+        kind = (rule.kind or "").upper()
+        if kind == "EARNING":
+            earnings[rule.code] = val
+        elif kind == "DEDUCTION":
+            deductions[rule.code] = val
+        elif kind == "EMPLOYER_CONTRIBUTION":
+            employer_contribs[rule.code] = val
+
+    # Standard fallback if pay type rules are unseeded/empty
+    if not rules:
+        if pay_basis == "STRUCTURE":
+            basic = float(earnings.get("BASIC", 0))
+            epf_wages = min(basic, float(config.epf_wage_cap))
+            deductions["EPF"] = _rupee(epf_wages * float(config.epf_employee_rate))
+            deductions["PROFESSIONAL_TAX"] = PayrollConfigService(db).get_professional_tax(basic)
+            deductions["TDS"] = int(get_monthly_tds(db, employee.id, month, year))
+        else:
+            leave_deduction = _rupee(gross * (base_days - days_worked) / base_days) if days_worked < base_days else 0
+            actual_pay = gross - leave_deduction
+            tds = _floor_rupee(actual_pay * float(config.consultant_tds_rate))
+            
+            return {
+                "employment_type": emp_type_code,
+                "monthly_fee": gross,
+                "days_worked": days_worked,
+                "base_working_days": base_days,
+                "leave_deduction": leave_deduction,
+                "extra_working_pay": 0,
+                "actual_pay": actual_pay,
+                "tds_rate": float(config.consultant_tds_rate),
+                "tds": tds,
+                "net_salary": actual_pay - tds,
+                "_row_gross_salary": gross,
+                "_row_deductions": tds,
+                "_row_lop_days": lop_days,
+                "_row_net_salary": actual_pay - tds,
+            }
+
+    gross_earnings = sum(earnings.values()) if pay_basis == "STRUCTURE" else (gross - deductions.get("LEAVE_DEDUCTION", 0.0))
+    total_deductions = sum(deductions.values()) - deductions.get("LEAVE_DEDUCTION", 0.0) if pay_basis == "FLAT_FEE" else sum(deductions.values())
     net_salary = gross_earnings - total_deductions
 
-    return {
-        "employment_type": "FULL_TIME",
-        "salary_structure_code": structure.code,
+    breakdown = {
+        "employment_type": emp_type_code,
+        "salary_structure_code": structure_code,
         "days_worked": days_worked,
-        "working_days": working_days,
+        "working_days": base_days,
         "lop_days": lop_days,
         "pro_rate_ratio": round(ratio, 4),
         "gross_salary": gross,
         "earnings": earnings,
-        "employer_contributions": {"EMPLOYER_PF": employer_pf, **employer_contribs},
-        "statutory_deductions": {"EPF": epf, "PROFESSIONAL_TAX": professional_tax, "TDS": tds},
+        "employer_contributions": employer_contribs,
+        "statutory_deductions": deductions,
         "other_deductions": {},
         "gross_earnings": gross_earnings,
         "total_deductions": total_deductions,
         "net_salary": net_salary,
-        # for the PayrollRunItem row
         "_row_gross_salary": gross,
         "_row_deductions": total_deductions,
         "_row_lop_days": lop_days,
         "_row_net_salary": net_salary,
     }
 
-
-def _compute_consultant(db: Session, employee: Employee, config: PayrollConfig, month: int, year: int) -> dict | None:
-    if not employee.bank_account_number or not employee.ifsc_code or not employee.current_salary:
-        return None
-
-    fee = float(employee.current_salary)
-    base_days = config.consultant_base_working_days
-    tds_rate = float(config.consultant_tds_rate)
-
-    lop_input = prepare_employee_payroll_input(db, employee_id=employee.id, month=month, year=year)
-    working_days = lop_input["working_days"] or base_days
-    lop_days = lop_input["lop_days"]
-    days_worked = max(0.0, working_days - lop_days)
-
-    leave_deduction = _rupee(fee * (base_days - days_worked) / base_days) if days_worked < base_days else 0
-    extra_working_pay = _rupee(fee * (days_worked - base_days) / base_days) if days_worked > base_days else 0
-    actual_pay = _rupee(fee) - leave_deduction + extra_working_pay
-    tds = _floor_rupee(actual_pay * tds_rate)  # FLOOR, not ROUND — statutory
-    net_salary = actual_pay - tds
-
-    return {
-        "employment_type": "CONSULTANT",
-        "monthly_fee": fee,
-        "days_worked": days_worked,
-        "base_working_days": base_days,
-        "leave_deduction": leave_deduction,
-        "extra_working_pay": extra_working_pay,
-        "arrears": 0,
-        "insurance_premium": 0,
-        "advance_deduction": 0,
-        "actual_pay": actual_pay,
-        "tds_rate": tds_rate,
-        "tds": tds,
-        "net_salary": net_salary,
-        # for the PayrollRunItem row
-        "_row_gross_salary": fee,
-        "_row_deductions": tds,
-        "_row_lop_days": lop_days,
-        "_row_net_salary": net_salary,
-    }
+    return breakdown
 
 
 def compute_payroll_run(db: Session, month: int, year: int) -> tuple[list[dict], list[str]]:
-    """Returns (line_items, skipped_names). line_items are dicts matching
-    PayrollRunItem's constructor kwargs (minus payroll_run_id, which the
-    caller supplies)."""
+    """Returns (line_items, skipped_names) driven by dynamic PayType logic."""
     config = PayrollConfigService(db).get()
 
     employees = db.scalars(
@@ -248,10 +333,7 @@ def compute_payroll_run(db: Session, month: int, year: int) -> tuple[list[dict],
     skipped: list[str] = []
 
     for employee in employees:
-        if employee.employment_type == EmploymentType.CONSULTANT:
-            breakdown = _compute_consultant(db, employee, config, month, year)
-        else:
-            breakdown = _compute_fulltime(db, employee, config, month, year)
+        breakdown = compute_employee_payroll(db, employee, config, month, year)
 
         if breakdown is None:
             skipped.append(_employee_display_name(employee))

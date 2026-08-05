@@ -495,6 +495,47 @@ def download_payroll_export(filename: str) -> FileResponse:
     )
 
 
+# ── LOP Audit ─────────────────────────────────────────────────────────────────
+
+class LopAuditItem(BaseModel):
+    employee_id: UUID
+    employee_name: str
+    employment_type: str
+    working_days: float
+    days_worked: float
+    lop_days: float
+    gross_salary: float
+    net_salary: float
+
+
+@router.get("/runs/{run_id}/lop-audit", response_model=list[LopAuditItem], dependencies=[Depends(require_permissions("payroll:view"))])
+def get_lop_audit(run_id: UUID, db: Session = Depends(get_db)) -> list[LopAuditItem]:
+    """Returns per-employee LOP details for a payroll run so HR can verify
+    leave impact before approving."""
+    run = _get_run_or_404(db, run_id)
+    items = db.scalars(
+        select(PayrollRunItem)
+        .where(PayrollRunItem.payroll_run_id == run.id)
+        .options(selectinload(PayrollRunItem.employee))
+    ).all()
+    result = []
+    for item in items:
+        breakdown = item.breakdown_json or {}
+        emp = item.employee
+        emp_name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else str(item.employee_id)
+        result.append(LopAuditItem(
+            employee_id=item.employee_id,
+            employee_name=emp_name,
+            employment_type=breakdown.get("employment_type", "FULL_TIME"),
+            working_days=breakdown.get("working_days", 0),
+            days_worked=breakdown.get("days_worked", 0),
+            lop_days=breakdown.get("lop_days", item.lop_days or 0),
+            gross_salary=float(item.gross_salary),
+            net_salary=float(item.net_salary),
+        ))
+    return result
+
+
 # ── PayrollConfig (Masters) ───────────────────────────────────────────────────
 
 class PayrollConfigResponse(BaseModel):

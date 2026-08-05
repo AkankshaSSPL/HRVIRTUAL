@@ -58,6 +58,8 @@ CRITICAL_ACTION_KEYWORDS = {
     "deactivate employee": ("employee_agent", "deactivate", "employee", "update"),
     "send official email": ("notification_agent", "send_official_email", "notification", "send_official_email"),
     "offboarding": ("offboarding_agent", "start", "offboarding", "start"),
+    "create pay type": ("payroll_agent", "create_pay_type", "payroll", "create_pay_type"),
+    "add pay type rule": ("payroll_agent", "add_pay_type_rule", "payroll", "add_pay_type_rule"),
 }
 
 
@@ -152,6 +154,9 @@ ACTION_SUMMARIES = {
     "lop": "Calculate LOP inputs",
     "start": "Start workflow",
     "send_official_email": "Review official email request",
+    "create_pay_type": "Create payroll pay type",
+    "inspect_pay_types": "View pay type configuration",
+    "add_pay_type_rule": "Add rule to pay type",
 }
 
 
@@ -492,6 +497,9 @@ class CoordinatorRuntimeService:
             "revise_salary": ("salary_assignment_agent", "revise", "salary_assignment", "revise"),
             "generate_payroll": ("payroll_agent", "process", "payroll", "process"),
             "inspect_payroll": ("payroll_agent", "inspect", "payroll", "inspect"),
+            "create_pay_type": ("payroll_agent", "create_pay_type", "payroll", "create_pay_type"),
+            "inspect_pay_types": ("payroll_agent", "inspect_pay_types", "payroll", "inspect"),
+            "add_pay_type_rule": ("payroll_agent", "add_pay_type_rule", "payroll", "add_pay_type_rule"),
             "onboarding": ("onboarding_agent", "start", "onboarding", "start"),
         }
         selected = routes.get(extraction.intent)

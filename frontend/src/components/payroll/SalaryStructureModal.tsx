@@ -303,7 +303,6 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
               ) : structureType === "employee" ? (
                 <div className="space-y-6">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {renderConfigField("EPF Wage Cap (₹)", "epf_wage_cap")}
                     {renderConfigField("Employee EPF Rate (%)", "epf_employee_rate")}
                     {renderConfigField("Employer PF Rate (%)", "epf_employer_rate")}
                     {renderConfigField("Employee Base Working Days", "employee_base_working_days")}

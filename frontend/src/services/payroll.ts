@@ -191,3 +191,92 @@ export function submitPayrollApproval(runId: string) {
 export function exportPayrollSheet(runId: string, type: "employee" | "consultant" | "bank" | "tds") {
   return apiPost<{ filename: string; download_url: string }>(`/payroll/runs/${runId}/export`, { type });
 }
+
+// ── Pay Types ──────────────────────────────────────────────────────────────
+export type PayTypeRuleRecord = {
+  id: string;
+  pay_type_id: string;
+  sequence: number;
+  code: string;
+  label: string;
+  kind: string;
+  calc_type: string;
+  value?: number | null;
+  reference_code?: string | null;
+  formula?: string | null;
+  taxable: boolean;
+  prorate: boolean;
+};
+
+export type PayTypeRecord = {
+  id: string;
+  code: string;
+  name: string;
+  pay_basis: string;
+  proration_basis: string;
+  base_working_days?: number | null;
+  active: boolean;
+  description?: string | null;
+  rules: PayTypeRuleRecord[];
+};
+
+export function getPayTypes(activeOnly = true) {
+  return apiGet<PayTypeRecord[]>(`/pay-types/?active_only=${activeOnly}`);
+}
+
+export function createPayType(payload: {
+  code: string;
+  name: string;
+  pay_basis?: string;
+  proration_basis?: string;
+  base_working_days?: number | null;
+  description?: string | null;
+}) {
+  return apiPost<PayTypeRecord>("/pay-types/", payload);
+}
+
+export function updatePayType(id: string, payload: Partial<{
+  name: string;
+  pay_basis: string;
+  proration_basis: string;
+  base_working_days: number | null;
+  description: string | null;
+  active: boolean;
+}>) {
+  return apiPut<PayTypeRecord>(`/pay-types/${id}`, payload);
+}
+
+export function deletePayType(id: string) {
+  return apiDelete<void>(`/pay-types/${id}`);
+}
+
+export function setPayTypeRules(id: string, rules: Array<{
+  sequence?: number;
+  code: string;
+  label?: string;
+  kind: string;
+  calc_type: string;
+  value?: number | null;
+  reference_code?: string | null;
+  formula?: string | null;
+  taxable?: boolean;
+  prorate?: boolean;
+}>) {
+  return apiPut<PayTypeRecord>(`/pay-types/${id}/rules`, { rules });
+}
+
+// ── LOP Audit ──────────────────────────────────────────────────────────────
+export type LopAuditRecord = {
+  employee_id: string;
+  employee_name: string;
+  employment_type: string;
+  working_days: number;
+  days_worked: number;
+  lop_days: number;
+  gross_salary: number;
+  net_salary: number;
+};
+
+export function getPayrollLopAudit(runId: string) {
+  return apiGet<LopAuditRecord[]>(`/payroll/runs/${runId}/lop-audit`);
+}

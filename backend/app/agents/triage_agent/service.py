@@ -35,6 +35,7 @@ CLASSIFY_TOOL = {
                         "salary_breakup", "refresh_salary_breakups",
                         "salary_history", "assign_salary", "revise_salary",
                         "generate_payroll", "inspect_payroll",
+                        "create_pay_type", "inspect_pay_types", "add_pay_type_rule",
                         "onboarding",
                     ]
                 }
@@ -79,6 +80,11 @@ Call classify_intent with exactly one intent. Do not answer the user.
 "who was absent yesterday"               → "absent_employees"
 "what salary structure does Priya have"  → "inspect_salary_structures"
 "create a new salary component Basic"    → "create_salary_component"
+"create a pay type Intern"               → "create_pay_type"
+"show pay types"                         → "inspect_pay_types"
+"list all pay types"                     → "inspect_pay_types"
+"add HRA rule to Full Time"              → "add_pay_type_rule"
+"add 40% HRA to full time pay type"      → "add_pay_type_rule"
 """
 
 

@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2, Download } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, RefreshCw, Trash2, Download, X, Settings2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AppLayout, ConfirmDialog, DataTable, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
+import { AppLayout, ConfirmDialog, DataTable, DrawerPanel, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge, ToastNotification } from "@/components/ui-system";
 import { SalaryStructureModal } from "@/components/payroll/SalaryStructureModal";
 import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
 import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
+import { PayrollSettingsTab } from "@/components/payroll/PayrollSettingsTab";
 import {
   createSalaryComponent,
   deleteSalaryComponent,
@@ -55,6 +56,7 @@ const defaultFormState: SalaryComponentForm = {
 
 export function PayrollPage() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"payroll" | "settings">("payroll");
   const [formOpen, setFormOpen] = useState(false);
   const [structureModalOpen, setStructureModalOpen] = useState(false);
   const [editingComponent, setEditingComponent] = useState<SalaryComponentRecord | null>(null);
@@ -299,16 +301,36 @@ export function PayrollPage() {
           actions={
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => componentsQuery.refetch()} disabled={componentsQuery.isFetching}>
-                <RefreshCw className={`h-4 w-4 ${componentsQuery.isFetching ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-4 w-4 mr-2 ${componentsQuery.isFetching ? "animate-spin" : ""}`} />
                 Refresh
-              </Button>
-              <Button onClick={formOpen ? closeForm : openCreateForm}>
-                <Plus className="h-4 w-4" />
-                {formOpen ? "Close Form" : "New Component"}
               </Button>
             </div>
           }
         />
+
+        <div className="mb-6 flex border-b">
+          <button
+            type="button"
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${activeTab === "payroll" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveTab("payroll")}
+          >
+            <FileSpreadsheet className="mr-1.5 inline h-4 w-4" />
+            Payroll
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${activeTab === "settings" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            <Settings2 className="mr-1.5 inline h-4 w-4" />
+            Settings
+          </button>
+        </div>
+
+        {activeTab === "settings" ? (
+          <PayrollSettingsTab />
+        ) : (
+        <>
 
         <SectionCard title="Payroll Runs" icon={<FileSpreadsheet className="h-4 w-4" />}>
           <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -407,13 +429,20 @@ export function PayrollPage() {
         ) : null}
 
         {formOpen ? (
-          <SectionCard>
-            <form onSubmit={submitForm} className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold">{editingComponent ? "Edit Salary Component" : "New Salary Component"}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{editingComponent ? "Update the component definition used by payroll calculations." : "Create an earning or deduction for salary structures."}</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 p-4">
+            <div className="bg-background w-full max-w-2xl rounded-lg shadow-lg border flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between border-b px-6 py-4">
+                <div>
+                  <h2 className="text-lg font-semibold">{editingComponent ? "Edit Salary Component" : "New Salary Component"}</h2>
+                  <p className="text-sm text-muted-foreground">{editingComponent ? "Update the component definition used by payroll calculations." : "Create an earning or deduction for salary structures."}</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={closeForm}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="overflow-y-auto px-6 py-6">
+                <form id="component-form" onSubmit={submitForm} className="space-y-6">
+                  <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-muted-foreground">Name</label>
                   <Input value={formState.name} onChange={(event) => setFormState({ ...formState, name: event.target.value })} placeholder="Basic salary" />
@@ -498,16 +527,18 @@ export function PayrollPage() {
                 </div>
               </div>
               {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-              <div className="flex flex-wrap items-center gap-2">
+            </form>
+          </div>
+              <div className="flex items-center justify-end gap-2 border-t px-6 py-4 bg-muted/20">
                 <Button type="button" variant="outline" onClick={closeForm}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                <Button form="component-form" type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
                   {createMutation.isPending || updateMutation.isPending ? "Saving..." : editingComponent ? "Update component" : "Save component"}
                 </Button>
               </div>
-            </form>
-          </SectionCard>
+            </div>
+          </div>
         ) : null}
 
         {!structuresQuery.isLoading && !structuresQuery.isError ? (
@@ -533,7 +564,13 @@ export function PayrollPage() {
 
         {!componentsQuery.isLoading && !componentsQuery.isError ? (
           <SectionCard>
-            <h3 className="mb-4 text-lg font-semibold">Salary Components</h3>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Salary Components</h3>
+              <Button size="sm" onClick={openCreateForm}>
+                <Plus className="h-4 w-4 mr-1" />
+                New Component
+              </Button>
+            </div>
             <DataTable
               data={components}
               columns={columns}
@@ -572,6 +609,8 @@ export function PayrollPage() {
             <ToastNotification title={editingComponent ? "Salary component updated" : "Salary component saved"} description="The payroll component catalog has been refreshed." type="success" />
           </div>
         ) : null}
+        </>
+        )}
       </PageContainer>
     </AppLayout>
   );

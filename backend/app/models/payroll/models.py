@@ -263,3 +263,91 @@ class EmployeeTDSConfig(BaseModel):
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     employee: Mapped["Employee"] = relationship()
+
+
+# ── Pay Type masters (dynamic pay-type rule builder) ──────────────────────────
+
+class PayBasis(StrEnum):
+    STRUCTURE = "STRUCTURE"
+    FLAT_FEE = "FLAT_FEE"
+
+
+class ProrationBasis(StrEnum):
+    CALENDAR_WORKING_DAYS = "CALENDAR_WORKING_DAYS"
+    FIXED_BASE_DAYS = "FIXED_BASE_DAYS"
+
+
+class PayTypeRuleKind(StrEnum):
+    EARNING = "EARNING"
+    DEDUCTION = "DEDUCTION"
+    EMPLOYER_CONTRIBUTION = "EMPLOYER_CONTRIBUTION"
+
+
+class PayTypeRuleCalcType(StrEnum):
+    FIXED = "FIXED"
+    PERCENT_OF = "PERCENT_OF"
+    FORMULA = "FORMULA"
+    STATUTORY_EPF = "STATUTORY_EPF"
+    STATUTORY_PT = "STATUTORY_PT"
+    STATUTORY_TDS = "STATUTORY_TDS"
+    FLAT_TDS = "FLAT_TDS"
+    LEAVE_DEDUCTION = "LEAVE_DEDUCTION"
+
+
+class PayType(BaseModel):
+    """Master record for a worker's pay type (FULL_TIME, CONSULTANT, and any
+    future type). `code` must match Employee.employment_type. Owns an ordered
+    rule set (PayTypeRule) that the payroll engine evaluates in `sequence`
+    order instead of branching in Python."""
+    __tablename__ = "pay_types"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_pay_types_code"),
+        Index("ix_pay_types_active", "active"),
+        Index("ix_pay_types_deleted_at", "deleted_at"),
+    )
+
+    code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    pay_basis: Mapped[str] = mapped_column(String(40), nullable=False)
+    proration_basis: Mapped[str] = mapped_column(
+        String(40), nullable=False, default=ProrationBasis.CALENDAR_WORKING_DAYS
+    )
+    base_working_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    rules: Mapped[list["PayTypeRule"]] = relationship(
+        back_populates="pay_type",
+        cascade="all, delete-orphan",
+        order_by="PayTypeRule.sequence",
+    )
+
+
+class PayTypeRule(BaseModel):
+    """A single earning/deduction/statutory line in a PayType's rule set.
+    FIXED / PERCENT_OF / FORMULA are evaluated the same way as
+    SalaryStructureItem via evaluate_component(). The STATUTORY_*, FLAT_TDS,
+    and LEAVE_DEDUCTION calc types read their numbers from PayrollConfig /
+    EmployeeTDSConfig / calculate_lop() at compute time — never store
+    statutory rates directly on the rule."""
+    __tablename__ = "pay_type_rules"
+    __table_args__ = (
+        UniqueConstraint("pay_type_id", "code", name="uq_pay_type_rules_pay_type_code"),
+        Index("ix_pay_type_rules_pay_type_id", "pay_type_id"),
+    )
+
+    pay_type_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pay_types.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    calc_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    reference_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    formula: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    taxable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    prorate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    pay_type: Mapped[PayType] = relationship(back_populates="rules")

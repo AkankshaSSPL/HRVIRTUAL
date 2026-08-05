@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { DrawerPanel } from "@/components/ui-system";
 import { getEmployee, getEmployeeFormOptions, updateEmployee, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
-import { getEmployeeTDSConfigs } from "@/services/payroll";
+import { getEmployeeTDSConfigs, getPayTypes } from "@/services/payroll";
 import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
@@ -33,6 +33,10 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
     queryFn: () => getLookups(["employment_type", "employment_status", "gender"]),
     enabled: open,
   });
+  const payTypesQuery = useQuery({ queryKey: ["pay-types-active"], queryFn: () => getPayTypes(true), enabled: open });
+  const employmentTypeOptions: [string, string][] = (payTypesQuery.data && payTypesQuery.data.length > 0)
+    ? payTypesQuery.data.map((pt) => [pt.code, pt.name])
+    : (lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label]);
   const tdsConfigsQuery = useQuery({
     queryKey: ["employee-tds-config", employeeId],
     queryFn: () => getEmployeeTDSConfigs(employeeId!),
@@ -119,7 +123,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           <div className={activeTab === "employment" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="Employee code"><Input value={form.employee_code ?? ""} onChange={(event) => setValue("employee_code", event.target.value)} /></Field>
             <Field label="Joining date" required><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
-            <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} /></Field>
+            <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...employmentTypeOptions]} /></Field>
             <Field label="Status"><Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} /></Field>
             <Field label="Department"><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
             <Field label="Designation" required><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>

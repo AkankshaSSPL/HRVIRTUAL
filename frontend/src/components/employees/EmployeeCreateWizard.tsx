@@ -8,6 +8,7 @@ import { DrawerPanel, StatusBadge } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
 import { createEmployee, getEmployeeFormOptions, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
+import { getPayTypes } from "@/services/payroll";
 
 const initialForm = {
   first_name: "",
@@ -156,6 +157,10 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
     queryFn: () => getLookups(["employment_type", "employment_status", "gender"]),
     enabled: open,
   });
+  const payTypesQuery = useQuery({ queryKey: ["pay-types-active"], queryFn: () => getPayTypes(true), enabled: open });
+  const employmentTypeOptions: [string, string][] = (payTypesQuery.data && payTypesQuery.data.length > 0)
+    ? payTypesQuery.data.map((pt) => [pt.code, pt.name])
+    : (lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label]);
   const createMutation = useMutation({
     mutationFn: createEmployee,
     onSuccess: async () => {
@@ -292,7 +297,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
                 <Input type="date" value={form.joining_date} onChange={(event) => setValue("joining_date", event.target.value)} />
               </Field>
               <Field label="Employment type">
-                <Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...(lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label])]} />
+                <Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...employmentTypeOptions]} />
               </Field>
               <Field label="Employee status">
                 <Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} />

@@ -58,6 +58,7 @@ from app.services.payroll_export import (
     generate_tds_sheet,
     is_safe_filename,
 )
+from app.services.pay_type_service import PayTypeSyncService
 
 
 class PayrollAgent(BaseAgent):
@@ -72,6 +73,9 @@ class PayrollAgent(BaseAgent):
         "process",
         "export",
         "submit_approval",
+        "create_pay_type",
+        "inspect_pay_types",
+        "add_pay_type_rule",
     ]
     approval_required_actions = []
 
@@ -150,6 +154,15 @@ class PayrollAgent(BaseAgent):
             self.db.add(component)
             self.db.commit()
             return self._component_changed_response("Salary component removed", "The salary component was removed from the active component list.", component, workflow_id)
+
+        if action == "create_pay_type":
+            return self._create_pay_type(command, workflow_id)
+
+        if action == "inspect_pay_types":
+            return self._inspect_pay_types(command, workflow_id)
+
+        if action == "add_pay_type_rule":
+            return self._add_pay_type_rule(command, workflow_id)
 
         components = list_salary_components(self.db)
         return self._component_list_response(command, components, workflow_id)
@@ -330,6 +343,13 @@ class PayrollAgent(BaseAgent):
             return "export"
         if any(word in normalized for word in ("process", "generate", "run")) and "payroll" in normalized:
             return "process"
+        # Pay-type classification — before component classification
+        if any(word in normalized for word in ("pay type", "pay-type", "paytype")):
+            if any(word in normalized for word in ("create", "add new", "new")):
+                return "create_pay_type"
+            if any(word in normalized for word in ("add rule", "add a rule", "add earning", "add deduction")):
+                return "add_pay_type_rule"
+            return "inspect_pay_types"
         if any(word in normalized for word in ("remove", "delete")) and "component" in normalized:
             return "delete_component"
         if any(word in normalized for word in ("update", "change")) and "component" in normalized:
@@ -396,6 +416,206 @@ class PayrollAgent(BaseAgent):
                 "title": "Salary Components",
                 "summary": f"Found {len(components)} salary component(s).",
                 "components": components,
+            },
+        }
+
+    # ── Pay-type agent handlers ────────────────────────────────────────────
+
+    def _create_pay_type(self, command: str, workflow_id: str | None) -> dict[str, Any]:
+        """Parse a natural-language create-pay-type command and invoke the service."""
+        import re
+        normalized = command.lower()
+        # Extract code-like token (first ALL-CAPS or quoted word after "pay type")
+        code_match = re.search(r"pay[\s\-]?type\s+[\"']?([A-Za-z_]+)", command, re.IGNORECASE)
+        code = code_match.group(1).upper().replace(" ", "_") if code_match else None
+        name = code.replace("_", " ").title() if code else None
+
+        pay_basis = "FLAT_FEE" if "flat" in normalized else "STRUCTURE"
+
+        if not code:
+            return self._status_response(
+                "Pay type name required",
+                "Please specify a name, e.g. 'create pay type Intern, flat fee'.",
+            )
+
+        svc = PayTypeSyncService(self.db)
+        existing = svc.get_by_code(code)
+        if existing:
+            return self._status_response(
+                "Pay type already exists",
+                f"A pay type with code '{code}' already exists.",
+            )
+
+        pay_type = svc.create_pay_type(code=code, name=name, pay_basis=pay_basis)
+        return {
+            "agent": self.name,
+            "agent_display_name": "Payroll Agent",
+            "action": "create_pay_type",
+            "message": f"Pay type '{pay_type.name}' ({pay_type.code}) created with {pay_type.pay_basis} basis.",
+            "operation_summary": "Pay type created",
+            "execution_status": "Completed",
+            "workflow_status": "Completed",
+            "approval_request_id": None,
+            "workflow_id": workflow_id,
+            "structured_response": {
+                "type": "status_banner",
+                "title": f"Pay type '{pay_type.name}' created",
+                "summary": f"Code: {pay_type.code}, Basis: {pay_type.pay_basis}. "
+                           f"Use the Settings tab to add rules, or say 'add rule to {pay_type.name}'.",
+                "payload": {"pay_type_id": str(pay_type.id), "code": pay_type.code},
+            },
+        }
+
+    def _inspect_pay_types(self, command: str, workflow_id: str | None) -> dict[str, Any]:
+        svc = PayTypeSyncService(self.db)
+        pay_types = svc.list_pay_types(active_only=False)
+        items = []
+        for pt in pay_types:
+            rules = [r for r in pt.rules if r.deleted_at is None]
+            items.append({
+                "id": str(pt.id), "code": pt.code, "name": pt.name,
+                "pay_basis": pt.pay_basis, "active": pt.active,
+                "rule_count": len(rules),
+            })
+        return {
+            "agent": self.name,
+            "agent_display_name": "Payroll Agent",
+            "action": "inspect_pay_types",
+            "message": f"Found {len(items)} pay type(s).",
+            "operation_summary": "Pay type catalog",
+            "execution_status": "Completed",
+            "workflow_status": "Completed",
+            "approval_request_id": None,
+            "workflow_id": workflow_id,
+            "structured_response": {
+                "type": "status_banner",
+                "title": "Pay Types",
+                "summary": "\n".join(
+                    f"• {pt['name']} ({pt['code']}) — {pt['pay_basis']}, {pt['rule_count']} rule(s)"
+                    + (" [inactive]" if not pt["active"] else "")
+                    for pt in items
+                ) or "No pay types configured.",
+                "payload": {"pay_types": items},
+            },
+        }
+
+    def _add_pay_type_rule(self, command: str, workflow_id: str | None) -> dict[str, Any]:
+        """Parse 'add HRA 40% of basic to Full Time' style commands."""
+        import re
+        normalized = command.lower()
+
+        # Find the pay type name/code — look for "to <name>" at the end
+        to_match = re.search(r"\bto\s+([a-z_\s]+?)(?:\s+pay[\s\-]?type)?$", normalized)
+        pay_type_query = to_match.group(1).strip() if to_match else None
+
+        svc = PayTypeSyncService(self.db)
+        pay_type = None
+        if pay_type_query:
+            pay_type = svc.get_by_code(pay_type_query.upper().replace(" ", "_"))
+            if not pay_type:
+                # Try matching by name
+                for pt in svc.list_pay_types(active_only=True):
+                    if pt.name.lower() == pay_type_query or pt.code.lower() == pay_type_query.replace(" ", "_"):
+                        pay_type = pt
+                        break
+
+        if not pay_type:
+            return self._status_response(
+                "Pay type not found",
+                f"Could not find pay type '{pay_type_query or '?'}'. Please specify which pay type to add the rule to.",
+            )
+
+        # Parse rule details from the command
+        rule_code = None
+        calc_type = "FIXED"
+        value = None
+        reference_code = None
+        kind = "EARNING"
+
+        # Check for percentage pattern: "40% of BASIC"
+        pct_match = re.search(r"(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?(\w+)", normalized)
+        if pct_match:
+            value = float(pct_match.group(1))
+            reference_code = pct_match.group(2).upper()
+            calc_type = "PERCENT_OF"
+
+        # Check for fixed amount: "₹5000" or "Rs 5000"
+        fixed_match = re.search(r"(?:₹|rs\.?\s*)(\d+(?:\.\d+)?)", normalized)
+        if fixed_match and not pct_match:
+            value = float(fixed_match.group(1))
+            calc_type = "FIXED"
+
+        # Check for statutory types
+        if "epf" in normalized:
+            calc_type = "STATUTORY_EPF"
+            kind = "DEDUCTION"
+            rule_code = "EPF"
+        elif "professional tax" in normalized or " pt " in f" {normalized} ":
+            calc_type = "STATUTORY_PT"
+            kind = "DEDUCTION"
+            rule_code = "PT"
+        elif "tds" in normalized:
+            if "flat" in normalized:
+                calc_type = "FLAT_TDS"
+                # Try to extract rate
+                rate_match = re.search(r"(\d+(?:\.\d+)?)\s*%", normalized)
+                if rate_match:
+                    value = float(rate_match.group(1))
+            else:
+                calc_type = "STATUTORY_TDS"
+            kind = "DEDUCTION"
+            rule_code = "TDS"
+        elif "leave deduction" in normalized:
+            calc_type = "LEAVE_DEDUCTION"
+            kind = "DEDUCTION"
+            rule_code = "LEAVE_DEDUCTION"
+
+        if "deduction" in normalized:
+            kind = "DEDUCTION"
+
+        # Extract rule code/name from command
+        if not rule_code:
+            # Look for a component name: "add HRA" → HRA
+            name_match = re.search(r"\badd\s+([A-Za-z]+)", command, re.IGNORECASE)
+            if name_match:
+                rule_code = name_match.group(1).upper()
+
+        if not rule_code:
+            return self._status_response(
+                "Rule details needed",
+                "Please specify what rule to add (e.g. 'add HRA 40% of BASIC to Full Time').",
+            )
+
+        label = rule_code.replace("_", " ").title()
+        rule = svc.add_rule(
+            pay_type.id,
+            code=rule_code,
+            label=label,
+            kind=kind,
+            calc_type=calc_type,
+            value=value,
+            reference_code=reference_code,
+            taxable=kind == "EARNING",
+            prorate=kind == "EARNING",
+        )
+
+        return {
+            "agent": self.name,
+            "agent_display_name": "Payroll Agent",
+            "action": "add_pay_type_rule",
+            "message": f"Rule '{rule.code}' added to {pay_type.name}.",
+            "operation_summary": f"Rule added to {pay_type.name}",
+            "execution_status": "Completed",
+            "workflow_status": "Completed",
+            "approval_request_id": None,
+            "workflow_id": workflow_id,
+            "structured_response": {
+                "type": "status_banner",
+                "title": f"Rule '{rule.code}' added to {pay_type.name}",
+                "summary": f"{kind.title()} rule: {calc_type}"
+                           + (f" = {value}" if value else "")
+                           + (f" of {reference_code}" if reference_code else ""),
+                "payload": {"rule_id": str(rule.id), "pay_type_id": str(pay_type.id)},
             },
         }
 

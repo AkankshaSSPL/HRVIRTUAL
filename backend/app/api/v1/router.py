@@ -8,7 +8,16 @@ from app.agents.leave_agent import api as leave
 # ONBOARDING DISABLED: from app.agents.onboarding_agent import api as onboarding
 from app.agents.resume_parser_agent import api as resume
 from app.agents.salary_assignment_agent import api as salary_assignments
-from app.api.v1.endpoints import assets, auth, documents, employees, health, lookups, masters
+from app.api.v1.endpoints import (
+    assets,
+    auth,
+    documents,
+    employees,
+    health,
+    lookups,
+    masters,
+    pay_type,
+)
 from app.api.v1.endpoints import payroll as payroll_endpoints
 from app.api.v1.endpoints import seats
 
@@ -21,6 +30,7 @@ api_router.include_router(employees.router, prefix="/employees", tags=["employee
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(lookups.router, prefix="/lookups", tags=["lookups"])
 api_router.include_router(masters.router, prefix="/masters", tags=["masters"])
+api_router.include_router(pay_type.router, prefix="/pay-types", tags=["pay-types"])
 api_router.include_router(attendance.router, prefix="/attendance", tags=["attendance"])
 api_router.include_router(leave.router, prefix="/leave", tags=["leave"])
 # ONBOARDING DISABLED: api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])

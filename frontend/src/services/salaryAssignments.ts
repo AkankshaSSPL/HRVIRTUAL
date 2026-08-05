@@ -71,26 +71,7 @@ export function submitSalaryAssignmentCommand(command: string) {
   return apiPost<Record<string, unknown>>("/salary-assignments/command", { command });
 }
 
-export type SalaryStructureOption = {
-  id: string;
-  name: string;
-  code: string;
-  description?: string | null;
-  active: boolean;
-};
-
-export function getSalaryStructures() {
-  return apiGet<SalaryStructureOption[]>("/payroll/structures");
-}
-
-export type CreateSalaryAssignmentPayload = {
-  employee_id: string;
-  salary_structure_id: string;
-  gross_salary: number;
-  effective_from: string;
-  reason?: string;
-};
-
-export function createSalaryAssignment(payload: CreateSalaryAssignmentPayload) {
-  return apiPost<SalaryAssignmentSummary>("/payroll/salary-assignments", payload);
-}
+// Re-export from payroll.ts to avoid duplication — single source of truth
+export { getSalaryStructures, createSalaryAssignment } from "@/services/payroll";
+export type { SalaryStructureRecord as SalaryStructureOption } from "@/services/payroll";
+export type { SalaryAssignmentRecord as CreateSalaryAssignmentPayload } from "@/services/payroll";
