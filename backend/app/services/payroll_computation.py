@@ -181,7 +181,7 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
 
     # Determine base working days & LOP input
     lop_input = prepare_employee_payroll_input(db, employee_id=employee.id, month=month, year=year)
-    if pay_type and pay_type.proration_basis == "FIXED_BASE_DAYS":
+    if pay_type and str(pay_type.proration_basis).strip().upper() == "FIXED_BASE_DAYS":
         base_days = float(pay_type.base_working_days or config.consultant_base_working_days)
     else:
         base_days = float(lop_input["working_days"] or config.employee_base_working_days)

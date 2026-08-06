@@ -7,25 +7,14 @@ import { Input } from "@/components/ui/input";
 import { ToastNotification } from "@/components/ui-system";
 import {
   createSalaryStructure,
-  getPayrollConfig,
   getSalaryComponents,
-  updatePayrollConfig,
-  type ProfessionalTaxSlab,
   type SalaryComponentRecord,
 } from "@/services/payroll";
 import { getLookups } from "@/services/lookups";
 
 type StructureType = "employee" | "consultant";
 
-type ConfigForm = {
-  epf_wage_cap: string;
-  epf_employee_rate: string;
-  epf_employer_rate: string;
-  consultant_tds_rate: string;
-  consultant_base_working_days: string;
-  employee_base_working_days: string;
-  professional_tax_slabs: ProfessionalTaxSlab[];
-};
+
 
 type StructureItemForm = {
   component_code: string;
@@ -47,10 +36,8 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [items, setItems] = useState<StructureItemForm[]>([]);
-  const [configForm, setConfigForm] = useState<ConfigForm | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const configQuery = useQuery({ queryKey: ["payroll-config"], queryFn: getPayrollConfig, enabled: open });
   const componentsQuery = useQuery({ queryKey: ["payroll-components"], queryFn: getSalaryComponents, enabled: open });
   const lookupsQuery = useQuery({
     queryKey: ["lookups", "salary_calculation_type"],
@@ -68,19 +55,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
     }
   }, [open]);
 
-  useEffect(() => {
-    if (configQuery.data && open) {
-      setConfigForm({
-        epf_wage_cap: String(configQuery.data.epf_wage_cap),
-        epf_employee_rate: String(Number(configQuery.data.epf_employee_rate) * 100),
-        epf_employer_rate: String(Number(configQuery.data.epf_employer_rate) * 100),
-        consultant_tds_rate: String(Number(configQuery.data.consultant_tds_rate) * 100),
-        consultant_base_working_days: String(configQuery.data.consultant_base_working_days),
-        employee_base_working_days: String(configQuery.data.employee_base_working_days),
-        professional_tax_slabs: configQuery.data.professional_tax_slabs ?? [],
-      });
-    }
-  }, [configQuery.data, open]);
+
 
   const structureMutation = useMutation({
     mutationFn: createSalaryStructure,
@@ -89,14 +64,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
     },
   });
 
-  const configMutation = useMutation({
-    mutationFn: updatePayrollConfig,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payroll-config"] });
-    },
-  });
-
-  const isPending = structureMutation.isPending || configMutation.isPending;
+  const isPending = structureMutation.isPending;
 
   const handleAddItem = () => {
     setItems([...items, { component_code: "", calculation_type: "", calculation_value: "", formula: "", reference_component_code: "" }]);
@@ -124,59 +92,13 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateSlab = (index: number, key: keyof ProfessionalTaxSlab, value: string) => {
-    if (!configForm) return;
-    const slabs = configForm.professional_tax_slabs.map((slab, i) => {
-      if (i !== index) return slab;
-      if (key === "max") {
-        return { ...slab, max: value.trim() === "" ? null : Number(value) };
-      }
-      return { ...slab, [key]: Number(value) };
-    });
-    setConfigForm({ ...configForm, professional_tax_slabs: slabs });
-  };
 
-  const addSlab = () => {
-    if (!configForm) return;
-    setConfigForm({
-      ...configForm,
-      professional_tax_slabs: [...configForm.professional_tax_slabs, { min: 0, max: null, amount: 0 }],
-    });
-  };
-
-  const removeSlab = (index: number) => {
-    if (!configForm) return;
-    setConfigForm({
-      ...configForm,
-      professional_tax_slabs: configForm.professional_tax_slabs.filter((_, i) => i !== index),
-    });
-  };
 
   const submit = async () => {
     if (!name.trim()) {
       setFormError("Structure name is required.");
       return;
     }
-    if (!configForm) {
-      setFormError("Configuration data not loaded yet.");
-      return;
-    }
-    
-    const numericFields: Array<[keyof ConfigForm, string]> = [
-      ["epf_wage_cap", "EPF wage cap"],
-      ["epf_employee_rate", "Employee EPF rate"],
-      ["epf_employer_rate", "Employer PF rate"],
-      ["consultant_tds_rate", "Consultant TDS rate"],
-      ["consultant_base_working_days", "Consultant base working days"],
-      ["employee_base_working_days", "Employee base working days"],
-    ];
-    for (const [key, label] of numericFields) {
-      if (!Number.isFinite(Number(configForm[key]))) {
-        setFormError(`${label} must be a valid number.`);
-        return;
-      }
-    }
-    
     if (structureType === "employee") {
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -198,16 +120,6 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
     setFormError(null);
     
     try {
-      await configMutation.mutateAsync({
-        epf_wage_cap: Number(configForm.epf_wage_cap),
-        epf_employee_rate: Number(configForm.epf_employee_rate) / 100,
-        epf_employer_rate: Number(configForm.epf_employer_rate) / 100,
-        consultant_tds_rate: Number(configForm.consultant_tds_rate) / 100,
-        consultant_base_working_days: Number(configForm.consultant_base_working_days),
-        employee_base_working_days: Number(configForm.employee_base_working_days),
-        professional_tax_slabs: configForm.professional_tax_slabs,
-      });
-
       const finalDescription = `[${structureType === 'employee' ? 'Employee' : 'Consultant'}] ${description}`.trim();
       
       const payloadItems = structureType === "employee" ? items.map(item => ({
@@ -230,19 +142,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
     }
   };
 
-  const renderConfigField = (label: string, key: keyof ConfigForm, placeholder?: string) => {
-    if (!configForm) return null;
-    return (
-      <div>
-        <label className="mb-2 block text-sm font-medium text-muted-foreground">{label}</label>
-        <Input 
-          value={configForm[key] as string} 
-          onChange={(e) => setConfigForm({ ...configForm, [key]: e.target.value })} 
-          placeholder={placeholder}
-        />
-      </div>
-    );
-  };
+
 
   if (!open) return null;
 
@@ -288,75 +188,6 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
               </div>
             </div>
 
-            <div className="border-t pt-6">
-              <h3 className="text-lg font-semibold mb-4 text-foreground/90">Global Payroll Configuration</h3>
-              {configQuery.isLoading ? (
-                <div className="animate-pulse flex space-x-4">
-                  <div className="flex-1 space-y-4 py-1">
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-muted rounded"></div>
-                      <div className="h-4 bg-muted rounded w-5/6"></div>
-                    </div>
-                  </div>
-                </div>
-              ) : structureType === "employee" ? (
-                <div className="space-y-6">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {renderConfigField("Employee EPF Rate (%)", "epf_employee_rate")}
-                    {renderConfigField("Employer PF Rate (%)", "epf_employer_rate")}
-                    {renderConfigField("Employee Base Working Days", "employee_base_working_days")}
-                  </div>
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="text-sm font-medium text-muted-foreground">Professional Tax Slabs</label>
-                      <Button type="button" size="sm" variant="outline" onClick={addSlab}>
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Slab
-                      </Button>
-                    </div>
-                    {configForm && (
-                      <div className="overflow-hidden rounded-md border">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="px-3 py-2 text-left font-medium text-muted-foreground">Min (₹)</th>
-                              <th className="px-3 py-2 text-left font-medium text-muted-foreground">Max (₹)</th>
-                              <th className="px-3 py-2 text-left font-medium text-muted-foreground">Amount (₹)</th>
-                              <th className="px-3 py-2" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {configForm.professional_tax_slabs.map((slab, index) => (
-                              <tr key={index} className="border-t">
-                                <td className="px-3 py-2">
-                                  <Input value={String(slab.min)} onChange={(e) => updateSlab(index, "min", e.target.value)} className="h-8 w-28" />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Input value={slab.max === null ? "" : String(slab.max)} placeholder="No limit" onChange={(e) => updateSlab(index, "max", e.target.value)} className="h-8 w-28" />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <Input value={String(slab.amount)} onChange={(e) => updateSlab(index, "amount", e.target.value)} className="h-8 w-28" />
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <Button type="button" size="icon" variant="ghost" onClick={() => removeSlab(index)}>
-                                    <Trash2 className="h-4 w-4 text-rose-600" />
-                                  </Button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {renderConfigField("Consultant TDS Rate (%)", "consultant_tds_rate")}
-                  {renderConfigField("Consultant Base Working Days", "consultant_base_working_days")}
-                </div>
-              )}
-            </div>
 
             {structureType === "employee" && (
               <div className="border-t pt-6">
@@ -460,9 +291,9 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
           </div>
         </div>
       </div>
-      {structureMutation.isSuccess && configMutation.isSuccess && (
+      {structureMutation.isSuccess && (
         <div className="fixed bottom-6 right-6 z-50">
-          <ToastNotification title="Success" description="Salary structure and payroll configuration updated." type="success" />
+          <ToastNotification title="Success" description="Salary structure updated." type="success" />
         </div>
       )}
     </>

@@ -164,20 +164,26 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
 
     for idx, item in enumerate(items, 1):
         bd = item.breakdown_json or {}
+        
+        monthly_fee = bd.get("monthly_fee") if "monthly_fee" in bd else bd.get("gross_salary", 0)
+        leave_deduction = bd.get("leave_deduction") if "leave_deduction" in bd else bd.get("statutory_deductions", {}).get("LEAVE_DEDUCTION", 0)
+        actual_pay = bd.get("actual_pay") if "actual_pay" in bd else bd.get("gross_earnings", 0)
+        tds = bd.get("tds") if "tds" in bd else bd.get("statutory_deductions", {}).get("FLAT_TDS", 0)
+
         ws.append([
             idx,
             _employee_name(item),
-            bd.get("monthly_fee", 0),
+            monthly_fee,
             bd.get("days_worked", ""),
             0, # arrears PAY
-            bd.get("leave_deduction", 0),
+            leave_deduction,
             0, # advance ded
             bd.get("extra_working_pay", 0),
             0, # insurance premium
-            bd.get("actual_pay", 0),
+            actual_pay,
             0, # SGST
             0, # CGST
-            bd.get("tds", 0),
+            tds,
             0, # Insurance TDS
             bd.get("net_salary", 0),
             "", ""
@@ -292,12 +298,12 @@ def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySet
     cons_tds_total = 0
     for idx, item in enumerate(consultant_items, 1):
         bd = item.breakdown_json or {}
-        tds_val = bd.get("tds", 0)
+        tds_val = bd.get("tds") if "tds" in bd else bd.get("statutory_deductions", {}).get("FLAT_TDS", 0)
         cons_tds_total += tds_val
         ws2.append([
             idx,
             _employee_name(item),
-            bd.get("actual_pay", 0), # assuming actual pay includes leave ded
+            bd.get("actual_pay") if "actual_pay" in bd else bd.get("gross_earnings", 0), # assuming actual pay includes leave ded
             "", # prev pay
             0, 0, 0, # cgst, sgst, arrears
             tds_val,

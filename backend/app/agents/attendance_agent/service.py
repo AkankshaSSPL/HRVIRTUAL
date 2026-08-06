@@ -37,17 +37,47 @@ class AttendanceAgent(BaseAgent):
     async def run(self, state):  # pragma: no cover
         return {"message": "Attendance Agent requires runtime invocation."}
 
+    def _extract_fields(self, command: str) -> dict[str, Any]:
+        from app.agents.attendance_agent.llm import llm_available, llm_extract_attendance
+        import logging
+        
+        if llm_available():
+            try:
+                return llm_extract_attendance(command)
+            except Exception:
+                logging.getLogger(__name__).exception("LLM attendance extraction failed; using rule fallback")
+        
+        month, year = parse_month_year(command)
+        status_enum = parse_attendance_status(command)
+        target_date = parse_attendance_date(command)
+        query = employee_query(command)
+        
+        return {
+            "employee_name": query,
+            "target_date": target_date.isoformat(),
+            "status": status_enum.value if status_enum else None,
+            "month": month,
+            "year": year
+        }
+
     def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("AttendanceAgent requires a database session")
         action = self._classify(action, command)
+        
+        extracted = self._extract_fields(command)
+        query = extracted.get("employee_name")
+        month = extracted.get("month") or date.today().month
+        year = extracted.get("year") or date.today().year
+        
+        target_date_str = extracted.get("target_date")
+        target_date = date.fromisoformat(target_date_str) if target_date_str else date.today()
+        
+        status_str = extracted.get("status")
+        status_value = status_str if status_str else parse_attendance_status(command).value
         if action == "absent_today":
-            target_date = parse_attendance_date(command)
             employees = absent_on(self.db, target_date)
             return self._table_response(f"Employees absent on {target_date.isoformat()}", employees, workflow_id, action="absent_today")
-
-        month, year = parse_month_year(command)
-        query = employee_query(command)
 
         if action == "matrix":
             matrix = attendance_matrix(self.db, month=month, year=year, employee=query)
@@ -61,7 +91,7 @@ class AttendanceAgent(BaseAgent):
             if not query:
                 return self._status_response("Please mention the employee name for the attendance detail.", workflow_id)
             employee = find_employee_or_raise(self.db, query)
-            detail = attendance_detail(self.db, employee_id=str(employee.id), attendance_date=parse_attendance_date(command))
+            detail = attendance_detail(self.db, employee_id=str(employee.id), attendance_date=target_date)
             return self._detail_response("Attendance detail loaded", detail, workflow_id)
 
         if action == "record":
@@ -71,8 +101,8 @@ class AttendanceAgent(BaseAgent):
             record = record_attendance(
                 self.db,
                 employee=employee,
-                attendance_date=parse_attendance_date(command),
-                status=parse_attendance_status(command).value,
+                attendance_date=target_date,
+                status=status_value,
                 remarks="Recorded by Attendance Agent",
                 actor_id=user_id,
             )
@@ -86,8 +116,8 @@ class AttendanceAgent(BaseAgent):
             record = record_attendance(
                 self.db,
                 employee=employee,
-                attendance_date=parse_attendance_date(command),
-                status=parse_attendance_status(command).value,
+                attendance_date=target_date,
+                status=status_value,
                 remarks="Regularized by Attendance Agent",
                 actor_id=user_id,
                 action="attendance.regularized",
