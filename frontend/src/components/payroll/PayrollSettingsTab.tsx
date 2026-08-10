@@ -658,26 +658,6 @@ function StatutoryConfigSection() {
     setEditing(true);
   };
 
-  const addSlab = () => {
-    if (!form) return;
-    const slabs = [...(form.professional_tax_slabs ?? [])];
-    const lastMax = slabs.length > 0 ? (slabs[slabs.length - 1].max ?? 0) : 0;
-    slabs.push({ min: lastMax + 1, max: null, amount: 0 });
-    setForm({ ...form, professional_tax_slabs: slabs });
-  };
-
-  const updateSlab = (index: number, field: keyof ProfessionalTaxSlab, value: number | null) => {
-    if (!form) return;
-    const slabs = [...(form.professional_tax_slabs ?? [])];
-    slabs[index] = { ...slabs[index], [field]: value };
-    setForm({ ...form, professional_tax_slabs: slabs });
-  };
-
-  const removeSlab = (index: number) => {
-    if (!form) return;
-    const slabs = (form.professional_tax_slabs ?? []).filter((_, i) => i !== index);
-    setForm({ ...form, professional_tax_slabs: slabs });
-  };
 
   if (configQuery.isLoading) return <p className="text-sm text-muted-foreground">Loading configuration…</p>;
   if (!config) return <p className="text-sm text-muted-foreground">No payroll configuration found.</p>;
@@ -700,31 +680,13 @@ function StatutoryConfigSection() {
             <ConfigItem label="Employee Base Working Days" value={`${config.employee_base_working_days}`} />
             <ConfigItem label="Consultant Base Working Days" value={`${config.consultant_base_working_days}`} />
           </div>
-          {config.professional_tax_slabs && config.professional_tax_slabs.length > 0 ? (
-            <div>
-              <h5 className="mb-2 text-sm font-medium text-muted-foreground">Professional Tax Slabs</h5>
-              <div className="rounded-md border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Min (₹)</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Max (₹)</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Tax (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {config.professional_tax_slabs.map((slab, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-2">{slab.min.toLocaleString()}</td>
-                        <td className="px-3 py-2">{slab.max != null ? slab.max.toLocaleString() : "∞"}</td>
-                        <td className="px-3 py-2 font-medium">₹{slab.amount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div>
+            <h5 className="mb-2 text-sm font-medium text-muted-foreground">Professional Tax (PT)</h5>
+            <div className="rounded-md border p-4 bg-muted/30">
+              <p className="text-sm"><strong>Fixed Deduction:</strong> ₹200 per month (₹300 in February)</p>
+              <p className="text-xs text-muted-foreground mt-1">This standard Maharashtra PT rule is strictly enforced by the payroll engine for all employees.</p>
             </div>
-          ) : null}
+          </div>
         </div>
       ) : form ? (
         <form
@@ -762,50 +724,12 @@ function StatutoryConfigSection() {
             </div>
           </div>
 
-          {/* PT Slab Editor */}
+          {/* PT Info (Read-only) */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <h5 className="text-sm font-medium text-muted-foreground">Professional Tax Slabs</h5>
-              <Button type="button" size="sm" variant="outline" onClick={addSlab}>
-                <Plus className="h-3 w-3 mr-1" /> Add Slab
-              </Button>
+            <h5 className="mb-2 text-sm font-medium text-muted-foreground">Professional Tax (PT)</h5>
+            <div className="rounded-md border p-4 bg-muted/30">
+              <p className="text-sm text-muted-foreground italic">PT is hardcoded in the backend engine (₹200/mo, ₹300 in Feb) and cannot be edited via slabs.</p>
             </div>
-            {(form.professional_tax_slabs ?? []).length > 0 ? (
-              <div className="rounded-md border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Min (₹)</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Max (₹)</th>
-                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Tax (₹)</th>
-                      <th className="px-3 py-2 w-12"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(form.professional_tax_slabs ?? []).map((slab, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-2 py-1">
-                          <input className={`${inputClass} h-8 text-xs`} type="number" value={slab.min} onChange={(e) => updateSlab(i, "min", Number(e.target.value))} />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input className={`${inputClass} h-8 text-xs`} type="number" placeholder="∞" value={slab.max ?? ""} onChange={(e) => updateSlab(i, "max", e.target.value === "" ? null : Number(e.target.value))} />
-                        </td>
-                        <td className="px-2 py-1">
-                          <input className={`${inputClass} h-8 text-xs`} type="number" value={slab.amount} onChange={(e) => updateSlab(i, "amount", Number(e.target.value))} />
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeSlab(i)} aria-label="Remove slab">
-                            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground italic">No PT slabs configured. Click "Add Slab" to add one.</p>
-            )}
           </div>
 
           <div className="flex gap-2">

@@ -381,11 +381,8 @@ def generate_payroll_run(
         .where(PayrollRun.month == payload.month, PayrollRun.year == payload.year)
         .where(PayrollRun.deleted_at.is_(None))
     )
-    if existing and existing.status != PayrollRunStatus.DRAFT:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payroll for {payload.month}/{payload.year} is {existing.status}. Cannot regenerate.",
-        )
+    # We removed the restriction that prevents regeneration of non-DRAFT runs.
+    # Now, clicking "Generate Payroll" will always recalculate and overwrite the run, resetting it to DRAFT.
 
     line_items, skipped = compute_payroll_run(db, payload.month, payload.year)
 

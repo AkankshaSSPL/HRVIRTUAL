@@ -141,6 +141,12 @@ function validateStep4(form: typeof initialForm): StepErrors {
   if (!form.bank_branch?.trim()) {
     errors.bank_branch = "Bank branch is required";
   }
+  if (!form.pan_number?.trim()) {
+    errors.pan_number = "PAN number is required";
+  }
+  if (!form.aadhaar_number?.trim()) {
+    errors.aadhaar_number = "Aadhaar number is required";
+  }
   return errors;
 }
 
@@ -252,10 +258,10 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
           <div className="space-y-4">
             <WizardHeading title="Basic Information" description="Identity, contact information, and personal details." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="First name" required error={showErrors ? step0Errors.first_name : undefined}>
+              <Field label="First name" required error={showErrors ? step0Errors.first_name : undefined} success={Boolean(form.first_name?.trim())}>
                 <Input value={form.first_name} onChange={(event) => setValue("first_name", event.target.value)} placeholder="e.g. John" />
               </Field>
-              <Field label="Last name" required error={showErrors ? step0Errors.last_name : undefined}>
+              <Field label="Last name" required error={showErrors ? step0Errors.last_name : undefined} success={Boolean(form.last_name?.trim())}>
                 <Input value={form.last_name} onChange={(event) => setValue("last_name", event.target.value)} placeholder="e.g. Doe" />
               </Field>
               <Field label="Employee ID" hint="Auto-generated on save">
@@ -264,16 +270,16 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               <Field label="Official email" error={showErrors ? step0Errors.official_email : undefined}>
                 <Input type="email" value={form.official_email} onChange={(event) => setValue("official_email", event.target.value)} placeholder="e.g. john@example.com" />
               </Field>
-              <Field label="Personal email" required error={showErrors ? step0Errors.personal_email : undefined}>
+              <Field label="Personal email" required error={showErrors ? step0Errors.personal_email : undefined} success={Boolean(form.personal_email?.trim())}>
                 <Input type="email" value={form.personal_email} onChange={(event) => setValue("personal_email", event.target.value)} placeholder="e.g. john@example.com" />
               </Field>
-              <Field label="Phone number" required error={showErrors ? step0Errors.phone : undefined}>
+              <Field label="Phone number" required error={showErrors ? step0Errors.phone : undefined} success={Boolean(form.phone?.trim())}>
                 <Input value={form.phone} onChange={(event) => setValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" />
               </Field>
-              <Field label="Date of birth" required error={showErrors ? step0Errors.dob : undefined}>
+              <Field label="Date of birth" required error={showErrors ? step0Errors.dob : undefined} success={Boolean(form.dob?.trim())}>
                 <Input type="date" value={form.dob} onChange={(event) => setValue("dob", event.target.value)} />
               </Field>
-              <Field label="Gender" required error={showErrors ? step0Errors.gender : undefined}>
+              <Field label="Gender" required error={showErrors ? step0Errors.gender : undefined} success={Boolean(form.gender?.trim())}>
                 <Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} />
               </Field>
             </div>
@@ -287,13 +293,13 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               <Field label="Department">
                 <Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} />
               </Field>
-              <Field label="Designation" required error={showErrors ? step1Errors.designation_id : undefined}>
+              <Field label="Designation" required error={showErrors ? step1Errors.designation_id : undefined} success={Boolean(form.designation_id?.trim())}>
                 <Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} />
               </Field>
               <Field label="Reporting manager">
                 <Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).map((item) => [item.id, item.name])]} />
               </Field>
-              <Field label="Date of joining" required error={showErrors ? step1Errors.joining_date : undefined}>
+              <Field label="Date of joining" required error={showErrors ? step1Errors.joining_date : undefined} success={Boolean(form.joining_date?.trim())}>
                 <Input type="date" value={form.joining_date} onChange={(event) => setValue("joining_date", event.target.value)} />
               </Field>
               <Field label="Employment type">
@@ -311,14 +317,14 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
             <WizardHeading title="Address & Location" description="Residential address, city, and zip code details." />
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Field label="Address" required error={showErrors ? step2Errors.address : undefined}>
+                <Field label="Address" required error={showErrors ? step2Errors.address : undefined} success={Boolean(form.address?.trim())}>
                   <Input value={form.address} onChange={(event) => setValue("address", event.target.value)} placeholder="e.g. 123 Main Street, Apt 4B" />
                 </Field>
               </div>
-              <Field label="City" required error={showErrors ? step2Errors.city : undefined}>
+              <Field label="City" required error={showErrors ? step2Errors.city : undefined} success={Boolean(form.city?.trim())}>
                 <Input value={form.city} onChange={(event) => setValue("city", event.target.value)} placeholder="e.g. San Francisco" />
               </Field>
-              <Field label="Zip code" required error={showErrors ? step2Errors.zip_code : undefined}>
+              <Field label="Zip code" required error={showErrors ? step2Errors.zip_code : undefined} success={Boolean(form.zip_code?.trim())}>
                 <Input value={form.zip_code} onChange={(event) => setValue("zip_code", event.target.value)} placeholder="e.g. 94105" />
               </Field>
             </div>
@@ -329,16 +335,16 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
           <div className="space-y-4">
             <WizardHeading title="Emergency Contact" description="Emergency contact details and emergency code." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Name" required error={showErrors ? step3Errors.name : undefined}>
+              <Field label="Name" required error={showErrors ? step3Errors.name : undefined} success={Boolean(emergencyContact.name?.trim())}>
                 <Input value={emergencyContact.name} onChange={(event) => setEmergencyContactValue("name", event.target.value)} placeholder="e.g. Jane Doe" />
               </Field>
-              <Field label="Relationship" required error={showErrors ? step3Errors.relationship : undefined}>
+              <Field label="Relationship" required error={showErrors ? step3Errors.relationship : undefined} success={Boolean(emergencyContact.relationship?.trim())}>
                 <Input value={emergencyContact.relationship} onChange={(event) => setEmergencyContactValue("relationship", event.target.value)} placeholder="e.g. Spouse, Parent, Sibling" />
               </Field>
-              <Field label="Phone number" required error={showErrors ? step3Errors.phone : undefined}>
+              <Field label="Phone number" required error={showErrors ? step3Errors.phone : undefined} success={Boolean(emergencyContact.phone?.trim())}>
                 <Input value={emergencyContact.phone} onChange={(event) => setEmergencyContactValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" />
               </Field>
-              <Field label="Emergency code" required error={showErrors ? step3Errors.emergency_code : undefined}>
+              <Field label="Emergency code" required error={showErrors ? step3Errors.emergency_code : undefined} success={Boolean(emergencyContact.emergency_code?.trim())}>
                 <Input value={emergencyContact.emergency_code} onChange={(event) => setEmergencyContactValue("emergency_code", event.target.value)} placeholder="e.g. ICE-9912" />
               </Field>
             </div>
@@ -349,22 +355,22 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
           <div className="space-y-4">
             <WizardHeading title="Banking Information" description="Bank, branch, statutory details, and base salary." />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Bank account number" required error={showErrors ? step4Errors.bank_account_number : undefined}>
+              <Field label="Bank account number" required error={showErrors ? step4Errors.bank_account_number : undefined} success={Boolean(form.bank_account_number?.trim())}>
                 <Input value={form.bank_account_number} onChange={(event) => setValue("bank_account_number", event.target.value)} placeholder="e.g. 1234567890" />
               </Field>
-              <Field label="IFSC code" required error={showErrors ? step4Errors.ifsc_code : undefined}>
+              <Field label="IFSC code" required error={showErrors ? step4Errors.ifsc_code : undefined} success={Boolean(form.ifsc_code?.trim())}>
                 <Input value={form.ifsc_code} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} placeholder="e.g. HDFC0001234" />
               </Field>
-              <Field label="Branch" required error={showErrors ? step4Errors.bank_branch : undefined}>
+              <Field label="Branch" required error={showErrors ? step4Errors.bank_branch : undefined} success={Boolean(form.bank_branch?.trim())}>
                 <Input value={form.bank_branch} onChange={(event) => setValue("bank_branch", event.target.value)} placeholder="e.g. Downtown Branch" />
               </Field>
               <Field label="Base salary">
                 <Input type="number" min="0" step="0.01" value={currentSalary} onChange={(event) => setCurrentSalary(event.target.value)} placeholder="e.g. 50000.00" />
               </Field>
-              <Field label="PAN number">
+              <Field label="PAN number" error={showErrors ? stepErrors.pan_number : undefined} required success={Boolean(form.pan_number?.trim())}>
                 <Input value={form.pan_number} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} placeholder="e.g. ABCDE1234F" />
               </Field>
-              <Field label="Aadhaar number">
+              <Field label="Aadhaar number" error={showErrors ? stepErrors.aadhaar_number : undefined} required success={Boolean(form.aadhaar_number?.trim())}>
                 <Input value={form.aadhaar_number} onChange={(event) => setValue("aadhaar_number", event.target.value)} placeholder="e.g. 1234 5678 9012" />
               </Field>
               <Field label="UAN number">
@@ -409,7 +415,7 @@ function WizardHeading({ title, description }: { title: string; description: str
   return <div><h3 className="text-base font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>;
 }
 
-function Field({ label, required, error, hint, children }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, required, error, success, hint, children }: { label: string; required?: boolean; error?: string; success?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <label className="space-y-1.5 text-sm">
       <span className="font-medium">
@@ -417,7 +423,13 @@ function Field({ label, required, error, hint, children }: { label: string; requ
         {required ? <span className="ml-1 text-rose-500 font-bold">*</span> : null}
       </span>
       {children}
-      {error ? <span className="block text-xs font-normal text-rose-600">{error}</span> : hint ? <span className="block text-xs font-normal text-muted-foreground">{hint}</span> : null}
+      {error ? (
+        <span className="block text-xs font-normal text-rose-600">{error}</span>
+      ) : success ? (
+        <span className="block text-xs font-normal text-emerald-600">Valid</span>
+      ) : hint ? (
+        <span className="block text-xs font-normal text-muted-foreground">{hint}</span>
+      ) : null}
     </label>
   );
 }

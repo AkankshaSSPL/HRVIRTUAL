@@ -6,10 +6,17 @@ import uuid
 from pathlib import Path
 
 from openpyxl import Workbook
+from openpyxl.styles import Font
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.payroll import CompanySettings, PayrollRun, PayrollRunItem
+
+def _make_last_row_bold(ws):
+    bold_font = Font(bold=True)
+    for cell in ws[ws.max_row]:
+        cell.font = bold_font
+
 
 # Files land here; served back via GET /payroll/export/{filename}.
 # NOTE: confirm this path is writable in your deployment (Docker volume,
@@ -61,9 +68,11 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
     ws = wb.active
     ws.title = "Employee Salary Sheet"
     ws.append([company.company_name])
+    _make_last_row_bold(ws)
     month_str = calendar.month_name[payroll_run.month]
     year_str = str(payroll_run.year)
     ws.append([f"Employee sheet month of {month_str} {year_str}"])
+    _make_last_row_bold(ws)
     ws.append([])
     
     headers = [
@@ -73,6 +82,7 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
         "Previous salary", "remark Hiked by", "Payable as updated Tax", "Deduction Pending", "TAX note"
     ]
     ws.append(headers)
+    _make_last_row_bold(ws)
 
     totals = { "CTC": 0, "BASIC": 0, "HRA": 0, "CA": 0, "EDU": 0, "MED": 0, "EmployerPF": 0, "WAGES": 0, "EPF": 0, "PT": 0, "TDS": 0, "TotalDed": 0, "Net": 0 }
 
@@ -151,7 +161,9 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
     year_str = str(payroll_run.year)
     
     ws.append([company.company_name])
+    _make_last_row_bold(ws)
     ws.append([f"Consultant Sheet — {month_str} {year_str}"])
+    _make_last_row_bold(ws)
     ws.append([])
     
     headers = [
@@ -161,6 +173,7 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
         "Previous salary", "remark Hiked by"
     ]
     ws.append(headers)
+    _make_last_row_bold(ws)
 
     for idx, item in enumerate(items, 1):
         bd = item.breakdown_json or {}
@@ -209,6 +222,7 @@ def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySe
         "Add Detai1", "Add Detai2", "Add Detai3", "Add Detai4", "Add Detai5", "Remarks"
     ]
     ws.append(headers)
+    _make_last_row_bold(ws)
 
     month_str = calendar.month_name[payroll_run.month]
     year_str = str(payroll_run.year)
@@ -251,12 +265,14 @@ def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySet
     ws1 = wb.active
     ws1.title = "Employee TDS"
     ws1.append([f"TDS Details Of Employee {month_str} {year_str}"])
+    _make_last_row_bold(ws1)
     ws1.append([])
     ws1.append([
         "SR. NO.", "NAME OF THE DIRECTORS & EMPLOYEE", "GROSS PAY", "EXTRA WORKING DAYS", "EXTRA WORKING Pay", 
         "TDS Difference Ded", f"{month_str} arrears PAY", "Extra Pay", "Prof.Tax.", "P.F.", "ADV DED", "Insu Pre", 
         "EPF", "LEAVE", "TDS", "Net PAY"
     ])
+    _make_last_row_bold(ws1)
     
     emp_tds_total = 0
     for idx, item in enumerate(employee_items, 1):
@@ -289,11 +305,13 @@ def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySet
     next_month_str = calendar.month_name[next_month]
     
     ws2.append([f"CONSULTANCY FEES {month_str} {year_str}, PAID IN THE MONTH of {next_month_str} {next_year}"])
+    _make_last_row_bold(ws2)
     ws2.append([])
     ws2.append([
         "Sr. No", "CONSULTANTS' NAME", f"{month_str} PAY", "Previous Pay", "CGST 9%", "SGST 9%", 
         "arrears PAY", f"{month_str} TDS", "NET PAY", "Remark"
     ])
+    _make_last_row_bold(ws2)
     
     cons_tds_total = 0
     for idx, item in enumerate(consultant_items, 1):
@@ -317,6 +335,7 @@ def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySet
     
     # Office Rent Section
     ws2.append(["", "", f"{month_str} PAY", "CGST 9%", "SGST 9%", "", "TDS", "NET PAY"])
+    _make_last_row_bold(ws2)
     ws2.append(["", "Office Rent", 0, 0, 0, "", 0, 0])
     ws2.append([])
     ws2.append(["", "TDS of Consultant + TDS for Office Rent =", f"₹ {cons_tds_total}"])

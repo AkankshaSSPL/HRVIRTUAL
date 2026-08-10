@@ -147,7 +147,7 @@ def evaluate_pay_type_rule(
 
     if calc_type == "STATUTORY_PT":
         basic = float(resolved.get("BASIC", 0))
-        return float(PayrollConfigService(db).get_professional_tax(basic))
+        return float(PayrollConfigService(db).get_professional_tax(month))
 
     if calc_type == "STATUTORY_TDS":
         return float(get_monthly_tds(db, employee.id, month, year))
@@ -266,7 +266,7 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
             basic = float(earnings.get("BASIC", 0))
             epf_wages = min(basic, float(config.epf_wage_cap))
             deductions["EPF"] = _rupee(epf_wages * float(config.epf_employee_rate))
-            deductions["PROFESSIONAL_TAX"] = PayrollConfigService(db).get_professional_tax(basic)
+            deductions["PROFESSIONAL_TAX"] = float(PayrollConfigService(db).get_professional_tax(month))
             deductions["TDS"] = int(get_monthly_tds(db, employee.id, month, year))
         else:
             leave_deduction = _rupee(gross * (base_days - days_worked) / base_days) if days_worked < base_days else 0

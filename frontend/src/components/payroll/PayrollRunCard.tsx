@@ -41,7 +41,7 @@ export function PayrollRunCard({
   const theme = useAgentTheme("payroll");
   const statusInfo = STATUS_LABELS[status] ?? { label: status, tone: "neutral" };
   const [lopOpen, setLopOpen] = useState(false);
-  const canReviewLop = status === "DRAFT" || status === "PENDING_APPROVAL";
+  const canReviewLop = true;
   const lopQuery = useQuery({
     queryKey: ["lop-audit", runId],
     queryFn: () => getPayrollLopAudit(runId),

@@ -27,11 +27,6 @@ class PayrollConfigService:
             )
         return config
 
-    def get_professional_tax(self, monthly_basic: float) -> int:
-        """Slab lookup against PayrollConfig.professional_tax_slabs.
-        Slabs are [{"min": int, "max": int|None, "amount": int}, ...]."""
-        slabs = self.get().professional_tax_slabs or []
-        for slab in sorted(slabs, key=lambda s: s["min"], reverse=True):
-            if monthly_basic >= slab["min"] and (slab["max"] is None or monthly_basic <= slab["max"]):
-                return int(slab["amount"])
-        return 0
+    def get_professional_tax(self, month: int) -> int:
+        """Fixed PT: 300 for February (month 2), 200 otherwise."""
+        return 300 if month == 2 else 200
