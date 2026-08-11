@@ -94,8 +94,8 @@ class EmployeeUpdateRequest(BaseModel):
     bank_account_number: str | None = None
     ifsc_code: str | None = None
     bank_branch: str | None = None
-    pan_number: str
-    aadhaar_number: str
+    pan_number: str | None = None
+    aadhaar_number: str | None = None
     uan_number: str | None = None
     current_salary: Decimal | None = None
     emergency_contact: dict[str, Any] | None = None

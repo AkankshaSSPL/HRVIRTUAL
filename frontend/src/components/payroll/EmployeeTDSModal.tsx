@@ -81,8 +81,10 @@ export function EmployeeTDSModal({ open, employeeId, employeeName, onClose }: Em
     createMutation.mutate();
   };
 
+  if (!open) return null;
+
   return (
-    <DrawerPanel open={open} title={`TDS Configuration — ${employeeName}`} size="md" onClose={onClose}>
+    <DrawerPanel open={open} title={`TDS Configuration — ${employeeName}`} size="2xl" onClose={onClose}>
       <div className="space-y-5 p-1">
         <div>
           <label className="mb-2 block text-sm font-medium text-muted-foreground">Financial Year</label>

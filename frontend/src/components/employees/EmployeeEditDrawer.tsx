@@ -99,25 +99,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
     current_salary: currentSalary === "" ? null : Number(currentSalary),
   } as Partial<EmployeeCreatePayload>;
 
-  const isFormValid = Boolean(
-    form.first_name?.trim() &&
-    form.last_name?.trim() &&
-    form.personal_email?.trim() &&
-    form.phone?.trim() &&
-    form.dob?.trim() &&
-    form.gender?.trim() &&
-    form.address?.trim() &&
-    form.city?.trim() &&
-    form.zip_code?.trim() &&
-    form.emergency_code?.trim() &&
-    form.joining_date?.trim() &&
-    form.designation_id?.trim() &&
-    form.bank_account_number?.trim() &&
-    form.ifsc_code?.trim() &&
-    form.bank_branch?.trim() &&
-    form.pan_number?.trim() &&
-    form.aadhaar_number?.trim()
-  );
+  const isFormValid = Boolean(form.first_name?.trim());
 
   return (
     <DrawerPanel open={open} title="Update Employee" size="2xl" onClose={onClose}>
@@ -204,7 +186,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{updateMutation.error instanceof Error ? updateMutation.error.message : "Employee update could not be saved."}</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={updateMutation.isPending} onClick={() => updateMutation.mutate(payload)}>
+            <Button disabled={!isFormValid || updateMutation.isPending} onClick={() => updateMutation.mutate(payload)}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>

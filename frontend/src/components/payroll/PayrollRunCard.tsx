@@ -41,10 +41,11 @@ export function PayrollRunCard({
   const theme = useAgentTheme("payroll");
   const statusInfo = STATUS_LABELS[status] ?? { label: status, tone: "neutral" };
   const [lopOpen, setLopOpen] = useState(false);
+  const [lopFilter, setLopFilter] = useState<"ALL" | "EMPLOYEE" | "CONSULTANT">("ALL");
   const canReviewLop = true;
   const lopQuery = useQuery({
-    queryKey: ["lop-audit", runId],
-    queryFn: () => getPayrollLopAudit(runId),
+    queryKey: ["lop-audit", runId, lopFilter],
+    queryFn: () => getPayrollLopAudit(runId, lopFilter),
     enabled: lopOpen,
   });
 
@@ -140,7 +141,13 @@ export function PayrollRunCard({
             {lopOpen ? "Hide LOP Details" : "Review Leaves & LOP"}
           </Button>
           {lopOpen && (
-            <div className="mt-3 rounded-md border overflow-auto max-h-64">
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={lopFilter === "ALL" ? "default" : "outline"} onClick={() => setLopFilter("ALL")} className="h-7 text-xs px-2">All</Button>
+                <Button size="sm" variant={lopFilter === "EMPLOYEE" ? "default" : "outline"} onClick={() => setLopFilter("EMPLOYEE")} className="h-7 text-xs px-2">Employees</Button>
+                <Button size="sm" variant={lopFilter === "CONSULTANT" ? "default" : "outline"} onClick={() => setLopFilter("CONSULTANT")} className="h-7 text-xs px-2">Consultants</Button>
+              </div>
+              <div className="rounded-md border overflow-auto max-h-64">
               {lopQuery.isLoading ? (
                 <p className="p-3 text-xs text-muted-foreground">Loading LOP details…</p>
               ) : !lopQuery.data?.length ? (
@@ -171,6 +178,7 @@ export function PayrollRunCard({
                   </tbody>
                 </table>
               )}
+              </div>
             </div>
           )}
         </div>

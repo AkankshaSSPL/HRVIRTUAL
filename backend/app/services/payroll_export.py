@@ -103,9 +103,9 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
             bd.get("gross_salary", 0),
             earnings.get("BASIC", 0),
             earnings.get("HRA", 0),
-            earnings.get("CONVEYANCE", 0),
-            earnings.get("EDUCATION", 0),
-            earnings.get("MEDICAL", 0),
+            earnings.get("CA", 0),
+            earnings.get("EA", 0),
+            earnings.get("MA", 0),
             employer.get("EMPLOYER_PF", 0),
             wages,
             epf_val,
@@ -124,9 +124,9 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
         totals["CTC"] += bd.get("gross_salary", 0)
         totals["BASIC"] += earnings.get("BASIC", 0)
         totals["HRA"] += earnings.get("HRA", 0)
-        totals["CA"] += earnings.get("CONVEYANCE", 0)
-        totals["EDU"] += earnings.get("EDUCATION", 0)
-        totals["MED"] += earnings.get("MEDICAL", 0)
+        totals["CA"] += earnings.get("CA", 0)
+        totals["EDU"] += earnings.get("EA", 0)
+        totals["MED"] += earnings.get("MA", 0)
         totals["EmployerPF"] += employer.get("EMPLOYER_PF", 0)
         totals["WAGES"] += wages
         totals["EPF"] += epf_val

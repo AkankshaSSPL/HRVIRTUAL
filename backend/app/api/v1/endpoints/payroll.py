@@ -2,7 +2,7 @@ from typing import Any, Literal
 from uuid import UUID
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, or_, select
@@ -506,7 +506,11 @@ class LopAuditItem(BaseModel):
 
 
 @router.get("/runs/{run_id}/lop-audit", response_model=list[LopAuditItem], dependencies=[Depends(require_permissions("payroll:view"))])
-def get_lop_audit(run_id: UUID, db: Session = Depends(get_db)) -> list[LopAuditItem]:
+def get_lop_audit(
+    run_id: UUID, 
+    filter_type: str | None = Query(None, description="Filter by employment type (e.g. CONSULTANT, FULL_TIME)"),
+    db: Session = Depends(get_db)
+) -> list[LopAuditItem]:
     """Returns per-employee LOP details for a payroll run so HR can verify
     leave impact before approving."""
     run = _get_run_or_404(db, run_id)
@@ -530,6 +534,11 @@ def get_lop_audit(run_id: UUID, db: Session = Depends(get_db)) -> list[LopAuditI
             gross_salary=float(item.gross_salary),
             net_salary=float(item.net_salary),
         ))
+    
+    if filter_type and filter_type.upper() != "ALL":
+        target = "FULL_TIME" if filter_type.upper() == "EMPLOYEE" else filter_type.upper()
+        result = [item for item in result if item.employment_type == target]
+
     return result
 
 

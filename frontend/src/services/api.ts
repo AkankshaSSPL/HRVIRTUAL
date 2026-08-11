@@ -89,7 +89,7 @@ async function apiRequest<T>(path: string, init: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new ApiError(payload?.detail ?? `API request failed: ${response.status}`, response.status);
+    throw new ApiError(payload?.detail ? (typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail)) : `API request failed: ${response.status}`, response.status);
   }
   return response.json() as Promise<T>;
 }

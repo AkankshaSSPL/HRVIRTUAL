@@ -277,6 +277,7 @@ export type LopAuditRecord = {
   net_salary: number;
 };
 
-export function getPayrollLopAudit(runId: string) {
-  return apiGet<LopAuditRecord[]>(`/payroll/runs/${runId}/lop-audit`);
+export function getPayrollLopAudit(runId: string, filterType?: "ALL" | "EMPLOYEE" | "CONSULTANT") {
+  const query = filterType && filterType !== "ALL" ? `?filter_type=${filterType}` : "";
+  return apiGet<LopAuditRecord[]>(`/payroll/runs/${runId}/lop-audit${query}`);
 }

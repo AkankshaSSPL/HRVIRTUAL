@@ -185,6 +185,7 @@ class Employee(BaseModel):
     pan_number: Mapped[str | None] = mapped_column(String(40), index=True)
     aadhaar_number: Mapped[str | None] = mapped_column(String(40))
     uan_number: Mapped[str | None] = mapped_column(String(60))
+    vpf_amount: Mapped[float | None] = mapped_column(Numeric(14, 2))
     profile_photo: Mapped[str | None] = mapped_column(Text)
     welcome_kit_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     seat_label: Mapped[str | None] = mapped_column(String(120))

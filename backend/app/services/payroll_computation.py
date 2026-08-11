@@ -231,8 +231,12 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
         # Employer PF contribution
         basic = float(earnings.get("BASIC", 0))
         epf_wages = min(basic, float(config.epf_wage_cap))
-        employer_pf = _rupee(epf_wages * float(config.epf_employer_rate))
+        # 1.61% represents standard EPF admin charges (EDLI, EPF admin, etc.)
+        employer_pf = _rupee(epf_wages * (float(config.epf_employer_rate) + 0.0161))
         employer_contribs["EMPLOYER_PF"] = employer_pf
+
+        # Strictly cap EPF at the statutory wage limit
+        deductions["EPF"] = _rupee(epf_wages * float(config.epf_employee_rate))
 
     else:  # FLAT_FEE basis
         if not employee.current_salary:
