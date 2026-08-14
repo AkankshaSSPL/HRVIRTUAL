@@ -38,7 +38,6 @@ def compute_onboarding_progress(db: Session, employee: Employee) -> dict[str, An
         and employee.address
         and employee.zip_code
         and employee.city
-        and (employee.emergency_code or employee.emergency_contact)
     )
     employment_complete = bool(employee.joining_date and employee.designation_id)
     payroll_complete = bool(employee.bank_account_number and employee.ifsc_code and employee.bank_branch)

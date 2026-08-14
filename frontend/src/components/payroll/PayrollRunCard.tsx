@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getPayrollLopAudit, type LopAuditRecord } from "@/services/payroll";
 import { PayrollPreviewModal } from "./PayrollPreviewModal";
+import { SalarySlipModal } from "./SalarySlipModal";
 
 interface PayrollRunCardProps {
   runId: string;
@@ -50,7 +51,8 @@ export function PayrollRunCard({
     enabled: lopOpen,
   });
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewType, setPreviewType] = useState<"employee" | "consultant" | "tds" | "bank" | null>(null);
+  const [previewType, setPreviewType] = useState<"bank" | "employee" | "tds" | "consultant" | null>(null);
+  const [payslipEmployeeId, setPayslipEmployeeId] = useState<string | null>(null);
   const isApproved = status === "APPROVED" || status === "BANK_SHEET_GENERATED" || status === "COMPLETED";
 
   const exports = [
@@ -167,6 +169,7 @@ export function PayrollRunCard({
                       <th className="px-3 py-2 text-right font-medium">Worked</th>
                       <th className="px-3 py-2 text-right font-medium">LOP</th>
                       <th className="px-3 py-2 text-right font-medium">Net Salary</th>
+                      <th className="px-3 py-2 text-center font-medium">Payslip</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -178,6 +181,11 @@ export function PayrollRunCard({
                         <td className="px-3 py-2 text-right">{item.days_worked}</td>
                         <td className={`px-3 py-2 text-right font-medium ${item.lop_days > 0 ? "text-rose-600" : ""}`}>{item.lop_days}</td>
                         <td className="px-3 py-2 text-right font-medium">₹{item.net_salary.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-center">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPayslipEmployeeId(item.employee_id)} disabled={status === "Draft"}>
+                            <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -199,6 +207,12 @@ export function PayrollRunCard({
           if (previewType) onExport(previewType);
           setPreviewOpen(false);
         }}
+      />
+      
+      <SalarySlipModal
+        runId={runId}
+        employeeId={payslipEmployeeId}
+        onClose={() => setPayslipEmployeeId(null)}
       />
     </div>
   );

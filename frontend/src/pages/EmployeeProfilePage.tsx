@@ -53,7 +53,7 @@ export function EmployeeProfilePage() {
   const progressHeader = (
     <div className="space-y-3">
       {progressQuery.isLoading ? <LoadingSkeleton rows={2} /> : null}
-      {progress ? (
+      {progress && progress.percent < 100 ? (
         <OnboardingStatusPanel
           progress={progress}
           activeTab={activeTab}
@@ -93,6 +93,7 @@ export function EmployeeProfilePage() {
             extraHeader={progressHeader}
             activeTab={activeTab}
             onTabChange={setActiveTab}
+            onOpenSeatAssignment={() => setSeatModalOpen(true)}
           />
         ) : null}
         <EmployeeEditDrawer employeeId={editingEmployeeId} open={Boolean(editingEmployeeId)} onClose={() => setEditingEmployeeId(null)} />

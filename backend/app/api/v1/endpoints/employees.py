@@ -70,7 +70,6 @@ class EmployeeCreateRequest(BaseModel):
     uan_number: str | None = None
     current_salary: Decimal | None = None
     emergency_contact: dict[str, Any]
-    emergency_code: str | None = None
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -99,7 +98,6 @@ class EmployeeUpdateRequest(BaseModel):
     uan_number: str | None = None
     current_salary: Decimal | None = None
     emergency_contact: dict[str, Any] | None = None
-    emergency_code: str | None = None
     seat_label: str | None = None
 
 

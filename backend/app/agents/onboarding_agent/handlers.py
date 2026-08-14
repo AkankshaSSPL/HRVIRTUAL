@@ -102,7 +102,6 @@ def _validate_required_candidate(candidate: dict[str, Any]) -> None:
         "bank_account_number",
         "ifsc_code",
         "bank_branch",
-        "emergency_code",
     )
     missing = [field for field in required_fields if not candidate.get(field)]
     if missing:

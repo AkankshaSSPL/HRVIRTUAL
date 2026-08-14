@@ -8,6 +8,7 @@ import { getEmployee, getEmployeeFormOptions, updateEmployee, type EmployeeCreat
 import { getLookups } from "@/services/lookups";
 import { getEmployeeTDSConfigs, getPayTypes, previewSalaryBreakdown } from "@/services/payroll";
 import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
+import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
 
@@ -26,6 +27,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   const [currentSalary, setCurrentSalary] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("personal");
   const [tdsModalOpen, setTdsModalOpen] = useState(false);
+  const [seatModalOpen, setSeatModalOpen] = useState(false);
   const employeeQuery = useQuery({ queryKey: ["employee-detail", employeeId], queryFn: () => getEmployee(employeeId!), enabled: Boolean(open && employeeId) });
   const optionsQuery = useQuery({ queryKey: ["employee-form-options"], queryFn: getEmployeeFormOptions, enabled: open });
   const lookupsQuery = useQuery({
@@ -86,7 +88,6 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
       bank_account_number: employee.bank_account_number ?? "",
       ifsc_code: employee.ifsc_code ?? "",
       bank_branch: employee.bank_branch ?? "",
-      emergency_code: employee.emergency_code ?? "",
       pan_number: employee.pan_number ?? "",
       aadhaar_number: employee.aadhaar_number ?? "",
       uan_number: employee.uan_number ?? "",
@@ -112,6 +113,13 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
 
   return (
     <DrawerPanel open={open} title="Update Employee" size="2xl" onClose={onClose}>
+      <div className="absolute right-16 top-4">
+        {employeeId ? (
+          <Button size="sm" variant="outline" onClick={() => setSeatModalOpen(true)}>
+            Allocate Seating and Assets
+          </Button>
+        ) : null}
+      </div>
       {employeeQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading employee details...</p> : null}
       {employeeQuery.data ? (
         <div className="space-y-5">
@@ -128,7 +136,6 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             <Field label="Address" required success={Boolean(form.address?.trim())}><Input value={form.address ?? ""} onChange={(event) => setValue("address", event.target.value)} /></Field>
             <Field label="City" required success={Boolean(form.city?.trim())}><Input value={form.city ?? ""} onChange={(event) => setValue("city", event.target.value)} /></Field>
             <Field label="Zip code" required success={Boolean(form.zip_code?.trim())}><Input value={form.zip_code ?? ""} onChange={(event) => setValue("zip_code", event.target.value)} /></Field>
-            <Field label="Emergency code" required success={Boolean(form.emergency_code?.trim())}><Input value={form.emergency_code ?? ""} onChange={(event) => setValue("emergency_code", event.target.value)} /></Field>
           </div>
 
           <div className={activeTab === "employment" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
@@ -274,6 +281,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           }}
         />
       ) : null}
+      {employeeId && <SeatingAllocationModal employeeId={employeeId} open={seatModalOpen} onClose={() => setSeatModalOpen(false)} />}
     </DrawerPanel>
   );
 }

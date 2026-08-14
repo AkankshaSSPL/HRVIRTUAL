@@ -850,3 +850,77 @@ def preview_breakdown(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/runs/{run_id}/slip/{employee_id}", dependencies=[Depends(require_permissions("payroll:view"))])
+def get_payslip(run_id: UUID, employee_id: UUID, db: Session = Depends(get_db)):
+    run = db.scalar(select(PayrollRun).where(PayrollRun.id == run_id, PayrollRun.deleted_at.is_(None)))
+    if not run:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    
+    item = db.scalar(select(PayrollRunItem).where(PayrollRunItem.payroll_run_id == run_id, PayrollRunItem.employee_id == employee_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Payroll run item not found for this employee")
+    
+    employee = db.scalar(select(Employee).where(Employee.id == employee_id))
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    fy_start_year = run.year if run.month >= 4 else run.year - 1
+    fy_start_month = 4
+
+    ytd_items = db.scalars(
+        select(PayrollRunItem)
+        .join(PayrollRun, PayrollRunItem.payroll_run_id == PayrollRun.id)
+        .where(
+            PayrollRunItem.employee_id == employee_id,
+            PayrollRun.deleted_at.is_(None),
+            PayrollRun.status != PayrollRunStatus.DRAFT,
+            or_(
+                PayrollRun.year > fy_start_year,
+                (PayrollRun.year == fy_start_year) & (PayrollRun.month >= fy_start_month)
+            ),
+            or_(
+                PayrollRun.year < run.year,
+                (PayrollRun.year == run.year) & (PayrollRun.month <= run.month)
+            )
+        )
+    ).all()
+
+    ytd_earnings = {}
+    ytd_deductions = {}
+    for ytd_item in ytd_items:
+        breakdown = ytd_item.breakdown_json or {}
+        for k, v in (breakdown.get("earnings") or {}).items():
+            ytd_earnings[k] = ytd_earnings.get(k, 0) + float(v)
+        for k, v in (breakdown.get("statutory_deductions") or {}).items():
+            ytd_deductions[k] = ytd_deductions.get(k, 0) + float(v)
+
+    breakdown = item.breakdown_json or {}
+
+    return {
+        "employee": {
+            "name": f"{employee.first_name} {employee.last_name}".strip(),
+            "code": employee.employee_code,
+            "designation": employee.designation.title if employee.designation else None,
+            "joining_date": employee.joining_date.isoformat() if employee.joining_date else None,
+            "uan": employee.uan_number,
+            "pan": employee.pan_number,
+        },
+        "run": {
+            "month": run.month,
+            "year": run.year,
+        },
+        "attendance": {
+            "paid_days": float(breakdown.get("days_worked", 0.0)),
+            "lop_days": float(item.lop_days) if item.lop_days is not None else 0.0,
+        },
+        "earnings": breakdown.get("earnings", {}),
+        "deductions": breakdown.get("statutory_deductions", {}),
+        "ytd_earnings": ytd_earnings,
+        "ytd_deductions": ytd_deductions,
+        "totals": {
+            "gross_earnings": float(item.gross_salary),
+            "total_deductions": float(item.deductions),
+            "net_pay": float(item.net_salary),
+        }
+    }

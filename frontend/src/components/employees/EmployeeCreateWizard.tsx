@@ -40,7 +40,6 @@ const initialEmergencyContact = {
   name: "",
   relationship: "",
   phone: "",
-  emergency_code: "",
 };
 
 const steps = [
@@ -123,9 +122,6 @@ function validateStep3(emergencyContact: EmergencyContactForm): StepErrors {
   }
   if (!emergencyContact.phone.trim()) {
     errors.phone = "Phone number is required";
-  }
-  if (!emergencyContact.emergency_code.trim()) {
-    errors.emergency_code = "Emergency code is required";
   }
   return errors;
 }
@@ -214,14 +210,12 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
       name: emergencyContact.name.trim(),
       relationship: emergencyContact.relationship.trim(),
       phone: emergencyContact.phone.trim(),
-      code: emergencyContact.emergency_code.trim(),
     };
 
     return {
       ...sanitizedBase,
       current_salary: currentSalary.trim() ? Number(currentSalary) : undefined,
       emergency_contact: trimmedEmergencyContact,
-      emergency_code: emergencyContact.emergency_code.trim(),
     };
   }
 
@@ -333,7 +327,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
 
         {step === 3 ? (
           <div className="space-y-4">
-            <WizardHeading title="Emergency Contact" description="Emergency contact details and emergency code." />
+            <WizardHeading title="Emergency Contact" description="Emergency contact details." />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Name" required error={showErrors ? step3Errors.name : undefined} success={Boolean(emergencyContact.name?.trim())}>
                 <Input value={emergencyContact.name} onChange={(event) => setEmergencyContactValue("name", event.target.value)} placeholder="e.g. Jane Doe" />
@@ -343,9 +337,6 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               </Field>
               <Field label="Phone number" required error={showErrors ? step3Errors.phone : undefined} success={Boolean(emergencyContact.phone?.trim())}>
                 <Input value={emergencyContact.phone} onChange={(event) => setEmergencyContactValue("phone", event.target.value)} placeholder="e.g. +1 234 567 8900" />
-              </Field>
-              <Field label="Emergency code" required error={showErrors ? step3Errors.emergency_code : undefined} success={Boolean(emergencyContact.emergency_code?.trim())}>
-                <Input value={emergencyContact.emergency_code} onChange={(event) => setEmergencyContactValue("emergency_code", event.target.value)} placeholder="e.g. ICE-9912" />
               </Field>
             </div>
           </div>

@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     documents,
     employees,
     health,
+    hr_documents,
     lookups,
     masters,
     pay_type,
@@ -21,6 +22,7 @@ from app.api.v1.endpoints import (
 from app.api.v1.endpoints import payroll as payroll_endpoints
 from app.api.v1.endpoints import seats
 from app.api.v1.endpoints import audit_logs
+from app.api.v1.endpoints import dashboard
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -29,6 +31,7 @@ api_router.include_router(coordinator.router, prefix="/agents", tags=["agents"])
 api_router.include_router(agent_command.router, prefix="/agent-command", tags=["agent-command"])
 api_router.include_router(employees.router, prefix="/employees", tags=["employees"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+api_router.include_router(hr_documents.router, prefix="/hr-documents", tags=["hr-documents"])
 api_router.include_router(lookups.router, prefix="/lookups", tags=["lookups"])
 api_router.include_router(masters.router, prefix="/masters", tags=["masters"])
 api_router.include_router(pay_type.router, prefix="/pay-types", tags=["pay-types"])
@@ -42,3 +45,4 @@ api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

@@ -56,7 +56,7 @@ type SeatingAllocationModalProps = {
   onAssigned?: (seatLabel: string) => void;
 };
 
-export function SeatingAllocationModal({ open, employeeId, currentSeat, onClose, onAssigned }: SeatingAllocationModalProps) {
+export function SeatingAllocationModal({ open, employeeId, currentSeat: providedCurrentSeat, onClose, onAssigned }: SeatingAllocationModalProps) {
   const queryClient = useQueryClient();
   const [pendingSeat, setPendingSeat] = useState<string | null>(null);
   const [optionalAssets, setOptionalAssets] = useState<string[]>([]);
@@ -73,6 +73,8 @@ export function SeatingAllocationModal({ open, employeeId, currentSeat, onClose,
   const occupancyByLabel = new Map(
     (seatsQuery.data?.seats ?? []).map((seat) => [seat.label, seat]),
   );
+  
+  const currentSeat = providedCurrentSeat ?? (seatsQuery.data?.seats ?? []).find((s) => s.occupant_id === employeeId)?.label ?? null;
 
   async function invalidateAssetQueries() {
     await queryClient.invalidateQueries({ queryKey: ["employee-onboarding-progress", employeeId] });

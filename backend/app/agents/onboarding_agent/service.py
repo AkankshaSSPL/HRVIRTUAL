@@ -180,7 +180,6 @@ class OnboardingAgent(BaseAgent):
             ("zip_code", "zip_code"),
             ("city", "city"),
             ("bank_branch", "bank_branch"),
-            ("emergency_code", "emergency_code"),
             ("employment_type", "employment_type"),
             ("joining_date", "joining_date"),
             ("bank_account_number", "bank_account_number"),

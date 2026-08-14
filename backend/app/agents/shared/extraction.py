@@ -19,7 +19,6 @@ ONBOARDING_REQUIRED_FIELDS = [
     "bank_account_number",
     "ifsc_code",
     "bank_branch",
-    "emergency_code",
 ]
 
 
@@ -52,7 +51,6 @@ def extract_onboarding_entities(text: str) -> dict[str, Any]:
         "zip_code": _zip_code(normalized),
         "city": _city(normalized),
         "bank_branch": _bank_branch(normalized),
-        "emergency_code": _emergency_code(normalized),
         "seat": _seat(normalized),
         "resume_uploaded": False,
     }
@@ -357,9 +355,6 @@ def _city(text: str) -> str | None:
 def _bank_branch(text: str) -> str | None:
     return _labeled_value(text, ("bank branch", "branch"))
 
-
-def _emergency_code(text: str) -> str | None:
-    return _labeled_value(text, ("emergency code", "emergency contact code", "emergency phone", "emergency contact"))
 
 
 def _labeled_value(text: str, labels: tuple[str, ...]) -> str | None:

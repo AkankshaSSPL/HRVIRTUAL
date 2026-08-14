@@ -3,6 +3,7 @@ from app.models.approvals import ApprovalEvent, ApprovalRequest
 from app.models.audit import AuditLog
 from app.models.auth import Permission, RefreshToken, Role, RolePermission, User, UserRole
 from app.models.base import Base
+from app.models.company import HRDocument
 from app.models.lookup import LookupValue
 from app.models.employee import (
     AttendanceRecord,
@@ -47,6 +48,7 @@ __all__ = [
     "Employee",
     "EmployeeAsset",
     "EmployeeDocument",
+    "HRDocument",
     "LeaveApproval",
     "LeaveBalance",
     "LeaveRequest",

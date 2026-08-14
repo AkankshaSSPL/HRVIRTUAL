@@ -27,3 +27,27 @@ export function verifyDocument(documentId: string) {
 export function deleteDocument(documentId: string) {
   return apiDelete<{ status: string }>(`/documents/${documentId}`);
 }
+
+export type HRDocumentRecord = {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  file_url: string;
+  version: string;
+  downloads: number;
+  lastUpdate: string;
+  author: {
+    name: string;
+    email: string;
+  };
+};
+
+export function getHRDocuments() {
+  return apiGet<HRDocumentRecord[]>("/hr-documents");
+}
+
+export function createHRDocument(formData: FormData) {
+  return apiPost<HRDocumentRecord>("/hr-documents", formData);
+}

@@ -13,7 +13,7 @@ import { createSalaryAssignment, getEmployeePayrollImpact, getEmployeeSalary, ge
 import { getEmployeeAttendanceSummary } from "@/services/attendance";
 import { getEmployeeLeaveBalances, getEmployeeLeaveHistory } from "@/services/leave";
 import { getDocuments } from "@/services/documents";
-import { getAssets, type AssetRecord } from "@/services/assets";
+import { getAssets, createAsset, updateAssetStatus, getAssetTypes, type AssetRecord } from "@/services/assets";
 import { useAuthStore } from "@/stores/authStore";
 
 import { useRef } from "react";
@@ -708,6 +708,8 @@ export function EmployeeProfileDrawer({
   extraHeader,
   activeTab,
   onTabChange,
+  onOpenSeatAssignment,
+  onManageAssets,
 }: {
   open: boolean;
   employee: EmployeeCardData | null;
@@ -720,6 +722,7 @@ export function EmployeeProfileDrawer({
   extraHeader?: ReactNode;
   activeTab?: string;
   onTabChange?: (tab: string) => void;
+  onOpenSeatAssignment?: () => void;
 }) {
   const [internalTab, setInternalTab] = useState(initialTab);
   const tab = activeTab ?? internalTab;
@@ -794,6 +797,26 @@ export function EmployeeProfileDrawer({
     queryFn: () => getAssets(employee!.id!),
     enabled: Boolean(open && employee?.id && tab === "Assets"),
   });
+  
+  const [assigningAsset, setAssigningAsset] = useState(false);
+  const [assetForm, setAssetForm] = useState({ asset_type: "", asset_name: "", validity_date: "" });
+  const assetTypesQuery = useQuery({ queryKey: ["asset-types"], queryFn: getAssetTypes, enabled: Boolean(open && tab === "Assets" && assigningAsset) });
+  
+  const createAssetMutation = useMutation({
+    mutationFn: createAsset,
+    onSuccess: async () => {
+      setAssigningAsset(false);
+      setAssetForm({ asset_type: "", asset_name: "", validity_date: "" });
+      await queryClient.invalidateQueries({ queryKey: ["employee-assets", employee?.id] });
+    },
+  });
+
+  const assetStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => updateAssetStatus(id, status),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["employee-assets", employee?.id] });
+    },
+  });
   const tabs = ["Personal", "Employment", "Documents", "Assets", ...(canViewPayroll ? ["Salary"] : []), "Leave", "Attendance", ...(canViewPayroll ? ["Payroll Impact"] : [])];
   const profileEmployee = employee ? {
     ...employee,
@@ -829,6 +852,11 @@ export function EmployeeProfileDrawer({
             >
               Deactivate
             </Button>
+            {onOpenSeatAssignment ? (
+              <Button size="sm" type="button" variant="outline" onClick={onOpenSeatAssignment}>
+                Allocate Seating
+              </Button>
+            ) : null}
           </div>
           {extraHeader}
           <div className="flex gap-1 border-b pb-0 overflow-x-auto scrollbar-none -mb-px">
@@ -1082,7 +1110,68 @@ export function EmployeeProfileDrawer({
             </div>
           ) : null}
           {tab === "Assets" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="flex items-center justify-end">
+                <Button size="sm" variant={assigningAsset ? "outline" : "default"} onClick={() => setAssigningAsset((v) => !v)}>
+                  {assigningAsset ? "Cancel" : "+ Add Asset"}
+                </Button>
+              </div>
+
+              {assigningAsset ? (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <p className="text-sm font-semibold">New Asset Assignment</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1.5 text-sm">
+                      <span className="font-medium">Asset Type</span>
+                      <select
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        value={assetForm.asset_type}
+                        onChange={(event) => setAssetForm((current) => ({ ...current, asset_type: event.target.value }))}
+                      >
+                        <option value="">{assetTypesQuery.isLoading ? "Loading types..." : "Select type"}</option>
+                        {(assetTypesQuery.data?.types ?? []).map((type) => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="space-y-1.5 text-sm">
+                      <span className="font-medium">Asset Name/Model (Optional)</span>
+                      <input
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        value={assetForm.asset_name}
+                        onChange={(event) => setAssetForm((current) => ({ ...current, asset_name: event.target.value }))}
+                      />
+                    </label>
+                    <label className="space-y-1.5 text-sm sm:col-span-2">
+                      <span className="font-medium">Validity / Expiry Date (Optional)</span>
+                      <input
+                        type="date"
+                        className="h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        value={assetForm.validity_date}
+                        onChange={(event) => setAssetForm((current) => ({ ...current, validity_date: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      disabled={!employee?.id || !assetForm.asset_type || createAssetMutation.isPending}
+                      onClick={() =>
+                        employee?.id &&
+                        createAssetMutation.mutate({
+                          employee_id: employee.id,
+                          asset_type: assetForm.asset_type,
+                          asset_name: assetForm.asset_name || undefined,
+                          validity_date: assetForm.validity_date || undefined,
+                        })
+                      }
+                    >
+                      {createAssetMutation.isPending ? "Assigning..." : "Assign Asset"}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-muted-foreground">
                   {assetsQuery.isLoading ? "Loading…" : `Assets (${assetsQuery.data?.length ?? 0})`}
@@ -1112,10 +1201,29 @@ export function EmployeeProfileDrawer({
                           ) : null}
                         </div>
                       </div>
-                      <StatusBadge
-                        status={asset.asset_status.replace(/_/g, " ")}
-                        tone={asset.asset_status === "ASSIGNED" ? "success" : asset.asset_status === "RETURNED" ? "neutral" : asset.asset_status === "LOST" ? "danger" : "warning"}
-                      />
+                      <div className="flex items-center gap-4">
+                        <StatusBadge
+                          status={asset.asset_status.replace(/_/g, " ")}
+                          tone={asset.asset_status === "ASSIGNED" ? "success" : asset.asset_status === "RETURNED" ? "neutral" : asset.asset_status === "LOST" ? "danger" : "warning"}
+                        />
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                          {asset.asset_status === "ASSIGNED" ? (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => assetStatusMutation.mutate({ id: asset.id, status: "RETURN_PENDING" })}>
+                              Return
+                            </Button>
+                          ) : null}
+                          {asset.asset_status === "RETURN_PENDING" ? (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => assetStatusMutation.mutate({ id: asset.id, status: "RETURNED" })}>
+                              Mark Returned
+                            </Button>
+                          ) : null}
+                          {(asset.asset_status === "ASSIGNED" || asset.asset_status === "RETURN_PENDING") ? (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs text-rose-600 hover:bg-rose-50" onClick={() => assetStatusMutation.mutate({ id: asset.id, status: "LOST" })}>
+                              Lost
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

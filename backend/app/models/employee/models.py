@@ -174,7 +174,6 @@ class Employee(BaseModel):
     dob: Mapped[date | None] = mapped_column(Date)
     gender: Mapped[Gender | None] = mapped_column(String(30))
     emergency_contact: Mapped[dict | None] = mapped_column(JSONB)
-    emergency_code: Mapped[str | None] = mapped_column(String(60))
     bank_account_number: Mapped[str | None] = mapped_column(String(80))
     ifsc_code: Mapped[str | None] = mapped_column(String(40))
     bank_branch: Mapped[str | None] = mapped_column(String(160))
