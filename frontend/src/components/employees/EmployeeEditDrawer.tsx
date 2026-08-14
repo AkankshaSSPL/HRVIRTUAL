@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { DrawerPanel } from "@/components/ui-system";
 import { getEmployee, getEmployeeFormOptions, updateEmployee, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
-import { getEmployeeTDSConfigs, getPayTypes } from "@/services/payroll";
+import { getEmployeeTDSConfigs, getPayTypes, previewSalaryBreakdown } from "@/services/payroll";
 import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
@@ -37,11 +37,20 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   const employmentTypeOptions: [string, string][] = (payTypesQuery.data && payTypesQuery.data.length > 0)
     ? payTypesQuery.data.map((pt) => [pt.code, pt.name])
     : (lookupsQuery.data?.employment_type ?? []).map((item) => [item.code, item.label]);
-  const tdsConfigsQuery = useQuery({
-    queryKey: ["employee-tds-config", employeeId],
-    queryFn: () => getEmployeeTDSConfigs(employeeId!),
-    enabled: Boolean(open && employeeId),
+  const tdsConfigsQuery = useQuery({ queryKey: ["employee-tds", employeeId], queryFn: () => getEmployeeTDSConfigs(employeeId!), enabled: Boolean(open && employeeId) });
+
+  const [debouncedSalary, setDebouncedSalary] = useState(currentSalary);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSalary(currentSalary), 500);
+    return () => clearTimeout(handler);
+  }, [currentSalary]);
+
+  const previewQuery = useQuery({
+    queryKey: ["salary-preview", employeeId, debouncedSalary],
+    queryFn: () => previewSalaryBreakdown(employeeId!, Number(debouncedSalary)),
+    enabled: Boolean(open && employeeId && debouncedSalary && Number(debouncedSalary) > 0),
   });
+
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<EmployeeCreatePayload>) => updateEmployee(employeeId!, payload),
     onSuccess: async () => {
@@ -99,7 +108,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
     current_salary: currentSalary === "" ? null : Number(currentSalary),
   } as Partial<EmployeeCreatePayload>;
 
-  const isFormValid = Boolean(form.first_name?.trim());
+  const isFormValid = Boolean(form.first_name?.trim() && form.official_email?.trim());
 
   return (
     <DrawerPanel open={open} title="Update Employee" size="2xl" onClose={onClose}>
@@ -111,7 +120,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           <div className={activeTab === "personal" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
             <Field label="First name" required success={Boolean(form.first_name?.trim())}><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
             <Field label="Last name" required success={Boolean(form.last_name?.trim())}><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
-            <Field label="Official email"><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
+            <Field label="Official email" required success={Boolean(form.official_email?.trim())}><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
             <Field label="Personal email" required success={Boolean(form.personal_email?.trim())}><Input type="email" value={form.personal_email ?? ""} onChange={(event) => setValue("personal_email", event.target.value)} /></Field>
             <Field label="Phone" required success={Boolean(form.phone?.trim())}><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
             <Field label="Date of birth" required success={Boolean(form.dob?.trim())}><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
@@ -180,9 +189,70 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
               ) : (
                 <p className="text-sm text-muted-foreground">No TDS configuration on file yet.</p>
               )}
+
+              {/* Salary Breakdown Preview */}
+              {previewQuery.isFetching ? (
+                <p className="mt-4 text-sm text-muted-foreground">Calculating breakdown...</p>
+              ) : previewQuery.data && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold mb-3">Salary Breakdown Preview</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Earnings Card */}
+                    <div className="rounded-md border border-slate-200 border-l-4 border-l-emerald-500 p-4 bg-white shadow-sm flex flex-col">
+                      <h5 className="text-sm font-bold text-emerald-600 mb-4">Earnings</h5>
+                      <div className="space-y-3 flex-1">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600">Basic Salary</span>
+                          <span className="font-medium text-slate-900">₹{(previewQuery.data.earnings["BASIC"] || previewQuery.data.earnings["BASE_PAY"] || previewQuery.data.earnings["MONTHLY_FEE"] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600">Component Earnings</span>
+                          <span className="font-medium text-blue-600">₹{Object.entries(previewQuery.data.earnings).filter(([key]) => !["BASIC", "BASE_PAY", "MONTHLY_FEE", "OVERTIME"].includes(key)).reduce((sum, [_, val]) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        {previewQuery.data.earnings["OVERTIME"] ? (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-600">Overtime</span>
+                            <span className="font-medium text-emerald-600">₹{Number(previewQuery.data.earnings["OVERTIME"]).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex justify-between items-center text-sm font-bold border-t pt-3 mt-4">
+                        <span className="text-slate-900">Gross Pay</span>
+                        <span className="text-emerald-600">₹{Object.values(previewQuery.data.earnings).reduce((sum, val) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    {/* Deductions Card */}
+                    <div className="rounded-md border border-slate-200 border-l-4 border-l-rose-500 p-4 bg-white shadow-sm flex flex-col">
+                      <h5 className="text-sm font-bold text-rose-600 mb-4">Deductions</h5>
+                      <div className="space-y-3 flex-1">
+                        {previewQuery.data.deductions["LEAVE_DEDUCTION"] ? (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-slate-600">LOP Deduction</span>
+                            <span className="font-medium text-rose-600">₹{Number(previewQuery.data.deductions["LEAVE_DEDUCTION"]).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-600">Component Deductions</span>
+                          <span className="font-medium text-rose-600">₹{Object.entries(previewQuery.data.deductions).filter(([key]) => key !== "LEAVE_DEDUCTION").reduce((sum, [_, val]) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center text-sm font-bold border-t pt-3 mt-4">
+                        <span className="text-slate-900">Net Pay</span>
+                        <span className="text-emerald-600">₹{(previewQuery.data.net_pay || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
+          {!isFormValid && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+              Please provide all required fields, including the <strong>Official email</strong> on the Personal tab, before saving.
+            </p>
+          )}
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{updateMutation.error instanceof Error ? updateMutation.error.message : "Employee update could not be saved."}</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>

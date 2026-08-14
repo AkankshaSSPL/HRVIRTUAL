@@ -4,6 +4,7 @@ import { AgentCommandPage } from "@/pages/AgentCommandPage";
 import { ApprovalsPage } from "@/pages/ApprovalsPage";
 import { AssetsPage } from "@/pages/AssetsPage";
 import { AttendancePage } from "@/pages/AttendancePage";
+import { AuditLogsPage } from "@/pages/AuditLogsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DocumentsPage } from "@/pages/DocumentsPage";
 import { EmployeeProfilePage } from "@/pages/EmployeeProfilePage";
@@ -37,7 +38,7 @@ export const router = createBrowserRouter([
   { element: <ProtectedRoute permission="offboarding:view" />, children: [{ path: "/offboarding", element: <PlaceholderPage title="Offboarding" /> }] },
   { element: <ProtectedRoute permission="approvals:view" />, children: [{ path: "/approvals", element: <ApprovalsPage /> }] },
   { element: <ProtectedRoute permission="agent_command:view" />, children: [{ path: "/agent-command", element: <AgentCommandPage /> }] },
-  { element: <ProtectedRoute permission="audit_logs:view" />, children: [{ path: "/audit-logs", element: <PlaceholderPage title="Audit Logs" /> }] },
+  { element: <ProtectedRoute permission="audit_logs:view" />, children: [{ path: "/audit-logs", element: <AuditLogsPage /> }] },
   { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/masters", element: <MastersPage /> }] },
   { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/settings", element: <PlaceholderPage title="Settings" /> }] },
 ]);

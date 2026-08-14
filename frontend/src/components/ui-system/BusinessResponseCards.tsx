@@ -179,17 +179,22 @@ export function ApprovalBanner({
   );
 }
 
-export function StatusBannerCard({ title, summary, agent = "employee_agent" }: { title: string; summary: string; agent?: string | null }) {
+export function StatusBannerCard({ title, summary, agent = "employee_agent", variant = "default" }: { title: string; summary: string; agent?: string | null; variant?: "default" | "error" }) {
   const theme = agentThemeFor(agent);
+  
+  const isError = variant === "error";
+  const softClass = isError ? "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-900" : theme.soft;
+  const iconClass = isError ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-300 dark:border-red-800" : theme.icon;
+  
   return (
-    <div className={cn("rounded-lg border p-4 shadow-sm", theme.soft)}>
+    <div className={cn("rounded-lg border p-4 shadow-sm", softClass)}>
       <div className="flex gap-3">
-        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md border", theme.icon)}>
-          <CheckCircle2 className="h-4 w-4" />
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-md border", iconClass)}>
+          {isError ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
         </div>
         <div>
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{summary}</p>
+          <h3 className={cn("text-sm font-semibold", isError && "text-red-900 dark:text-red-100")}>{title}</h3>
+          <p className={cn("mt-1 text-sm leading-6", isError ? "text-red-700 dark:text-red-300" : "text-muted-foreground")}>{summary}</p>
         </div>
       </div>
     </div>
@@ -235,26 +240,107 @@ export function MissingFieldCard({
   summary,
   labels,
   draft,
+  onAction,
 }: {
   title?: string;
   summary?: string;
   labels: string[];
   draft?: CandidateCardData;
+  onAction?: (action: string) => void;
 }) {
   const theme = agentThemeFor("onboarding_agent");
+  const [formData, setFormData] = useState<Record<string, string>>({});
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parts: string[] = [];
+    if (formData.email) parts.push(`email is ${formData.email}`);
+    if (formData.phone) parts.push(`phone is ${formData.phone}`);
+    if (formData.name) parts.push(`name is ${formData.name}`);
+    if (formData.dob) parts.push(`date of birth is ${formData.dob}`);
+    
+    if (parts.length > 0 && onAction) {
+      onAction(parts.join(" and "));
+    }
+  };
+
+  const needsEmail = labels.some(l => l.toLowerCase().includes("email"));
+  const needsPhone = labels.some(l => l.toLowerCase().includes("phone"));
+  const needsName = labels.some(l => l.toLowerCase().includes("name"));
+  const needsDob = labels.some(l => l.toLowerCase().includes("dob") || l.toLowerCase().includes("date of birth"));
+
+  const showForm = (needsEmail || needsPhone || needsName || needsDob) && onAction;
+
   return (
     <div className={cn("space-y-4 rounded-lg border p-4 shadow-sm", theme.soft)}>
       <div>
         <h3 className="text-base font-semibold">{title}</h3>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{summary ?? "Reply with only the missing information. I will keep the current onboarding context."}</p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {labels.map((label) => (
-          <div key={label} className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm text-amber-800">
-            {label}
-          </div>
-        ))}
-      </div>
+      
+      {!showForm && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {labels.map((label) => (
+            <div key={label} className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm text-amber-800">
+              {label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          {needsName && (
+            <div>
+              <label className="text-sm font-medium">Full Name</label>
+              <input 
+                type="text" 
+                required 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
+                value={formData.name || ''} 
+                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} 
+              />
+            </div>
+          )}
+          {needsEmail && (
+            <div>
+              <label className="text-sm font-medium">Email Address</label>
+              <input 
+                type="email" 
+                required 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
+                value={formData.email || ''} 
+                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} 
+              />
+            </div>
+          )}
+          {needsPhone && (
+            <div>
+              <label className="text-sm font-medium">Phone Number</label>
+              <input 
+                type="tel" 
+                required 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
+                value={formData.phone || ''} 
+                onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} 
+              />
+            </div>
+          )}
+          {needsDob && (
+            <div>
+              <label className="text-sm font-medium">Date of Birth</label>
+              <input 
+                type="date" 
+                required 
+                className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
+                value={formData.dob || ''} 
+                onChange={e => setFormData(p => ({ ...p, dob: e.target.value }))} 
+              />
+            </div>
+          )}
+          <Button type="submit" size="sm">Submit Details</Button>
+        </form>
+      )}
     </div>
   );
 }
@@ -358,21 +444,21 @@ export function OnboardingProgressCard({
       <CandidateCard candidate={candidate} showActions={false} />
       <div className="overflow-x-auto pb-1">
         <div className="flex min-w-max items-stretch gap-2">
-        {steps.map((step) => {
-          const stepTheme = agentThemeFor(step.agent);
-          return (
-            <div key={`${step.agent}-${step.title}`} className={cn("w-44 shrink-0 rounded-md border p-3", stepTheme.soft)}>
-              <div className="flex items-center gap-2">
-                <div className={cn("h-2.5 w-2.5 rounded-full border", stepTheme.tint, stepTheme.border)} />
-                <p className="truncate text-sm font-medium">{step.title}</p>
+          {steps.map((step) => {
+            const stepTheme = agentThemeFor(step.agent);
+            return (
+              <div key={`${step.agent}-${step.title}`} className={cn("w-44 shrink-0 rounded-md border p-3", stepTheme.soft)}>
+                <div className="flex items-center gap-2">
+                  <div className={cn("h-2.5 w-2.5 rounded-full border", stepTheme.tint, stepTheme.border)} />
+                  <p className="truncate text-sm font-medium">{step.title}</p>
+                </div>
+                <div className="mt-2">
+                  <WorkflowStatusPill status={step.status} agent={step.agent} />
+                </div>
+                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{step.summary}</p>
               </div>
-              <div className="mt-2">
-                <WorkflowStatusPill status={step.status} agent={step.agent} />
-              </div>
-              <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{step.summary}</p>
-            </div>
-          );
-        })}
+            );
+          })}
         </div>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
@@ -1218,52 +1304,52 @@ function EmployeeMonthlyAttendancePanel({
     text: string;
     iconBg: string;
   }> = [
-    {
-      label: "Present",
-      value: summary.present_days ?? 0,
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      tint: "bg-emerald-50",
-      border: "border-emerald-200",
-      text: "text-emerald-700",
-      iconBg: "bg-emerald-500",
-    },
-    {
-      label: "Work From Home",
-      value: summary.wfh_days ?? 0,
-      icon: <Home className="h-4 w-4" />,
-      tint: "bg-cyan-50",
-      border: "border-cyan-200",
-      text: "text-cyan-700",
-      iconBg: "bg-cyan-500",
-    },
-    {
-      label: "Paid Leave",
-      value: summary.paid_leave_days ?? 0,
-      icon: <Flag className="h-4 w-4" />,
-      tint: "bg-violet-50",
-      border: "border-violet-200",
-      text: "text-violet-700",
-      iconBg: "bg-violet-500",
-    },
-    {
-      label: "Absent",
-      value: summary.absent_days ?? 0,
-      icon: <X className="h-4 w-4" />,
-      tint: "bg-rose-50",
-      border: "border-rose-200",
-      text: "text-rose-700",
-      iconBg: "bg-rose-500",
-    },
-    {
-      label: "Half Day",
-      value: summary.half_days ?? 0,
-      icon: <Ban className="h-4 w-4" />,
-      tint: "bg-amber-50",
-      border: "border-amber-200",
-      text: "text-amber-700",
-      iconBg: "bg-amber-500",
-    },
-  ];
+      {
+        label: "Present",
+        value: summary.present_days ?? 0,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+        tint: "bg-emerald-50",
+        border: "border-emerald-200",
+        text: "text-emerald-700",
+        iconBg: "bg-emerald-500",
+      },
+      {
+        label: "Work From Home",
+        value: summary.wfh_days ?? 0,
+        icon: <Home className="h-4 w-4" />,
+        tint: "bg-cyan-50",
+        border: "border-cyan-200",
+        text: "text-cyan-700",
+        iconBg: "bg-cyan-500",
+      },
+      {
+        label: "Paid Leave",
+        value: summary.paid_leave_days ?? 0,
+        icon: <Flag className="h-4 w-4" />,
+        tint: "bg-violet-50",
+        border: "border-violet-200",
+        text: "text-violet-700",
+        iconBg: "bg-violet-500",
+      },
+      {
+        label: "Absent",
+        value: summary.absent_days ?? 0,
+        icon: <X className="h-4 w-4" />,
+        tint: "bg-rose-50",
+        border: "border-rose-200",
+        text: "text-rose-700",
+        iconBg: "bg-rose-500",
+      },
+      {
+        label: "Half Day",
+        value: summary.half_days ?? 0,
+        icon: <Ban className="h-4 w-4" />,
+        tint: "bg-amber-50",
+        border: "border-amber-200",
+        text: "text-amber-700",
+        iconBg: "bg-amber-500",
+      },
+    ];
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">

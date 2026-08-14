@@ -1,5 +1,6 @@
 from typing import Any, Literal
 from uuid import UUID
+import calendar
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -16,6 +17,7 @@ from app.models.payroll import SalaryStructure, SalaryStructureItem
 from app.models.payroll.models import EmployeeSalaryAssignment, PayrollRun, PayrollRunItem, PayrollRunStatus
 from app.models.payroll import CompanySettings, EmployeeTDSConfig, PayrollConfig
 from app.models.employee import Employee
+from app.models.employee.models import LeaveRequest, LeaveRequestStatus
 from app.models.auth import User
 from app.agents.payroll_agent.tools import normalize_code
 from app.agents.salary_assignment_agent.services import SalaryAssignmentService
@@ -384,6 +386,21 @@ def generate_payroll_run(
     # We removed the restriction that prevents regeneration of non-DRAFT runs.
     # Now, clicking "Generate Payroll" will always recalculate and overwrite the run, resetting it to DRAFT.
 
+    start_date = date(payload.year, payload.month, 1)
+    end_date = date(payload.year, payload.month, calendar.monthrange(payload.year, payload.month)[1])
+
+    pending_leaves_count = db.query(LeaveRequest).filter(
+        LeaveRequest.status == LeaveRequestStatus.PENDING,
+        LeaveRequest.start_date <= end_date,
+        LeaveRequest.end_date >= start_date
+    ).count()
+
+    if pending_leaves_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"There are {pending_leaves_count} pending leave request(s) overlapping {calendar.month_name[payload.month]} {payload.year}. Please approve or reject them before generating payroll."
+        )
+
     line_items, skipped = compute_payroll_run(db, payload.month, payload.year)
 
     if existing:
@@ -452,10 +469,10 @@ def export_payroll_sheet(
     db: Session = Depends(get_db),
 ) -> dict:
     run = _get_run_or_404(db, run_id)
-    if payload.type == "bank" and run.status not in {
+    if run.status not in {
         PayrollRunStatus.APPROVED, PayrollRunStatus.BANK_SHEET_GENERATED, PayrollRunStatus.COMPLETED
     }:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bank sheet requires approved payroll. Submit for approval first.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exporting sheets requires approved payroll. Submit for approval first.")
 
     company = db.scalar(select(CompanySettings).where(CompanySettings.active == True, CompanySettings.deleted_at.is_(None)))  # noqa: E712
     if not company:
@@ -474,6 +491,30 @@ def export_payroll_sheet(
         db.commit()
 
     return {"filename": filename, "download_url": f"/payroll/export/{filename}"}
+
+
+@router.get("/runs/{run_id}/preview", dependencies=[Depends(require_permissions("payroll:view"))])
+def preview_payroll_sheet(
+    run_id: UUID,
+    type: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    run = _get_run_or_404(db, run_id)
+    company = db.scalar(select(CompanySettings).where(CompanySettings.active == True, CompanySettings.deleted_at.is_(None)))  # noqa: E712
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company settings not configured yet.")
+
+    generators = {
+        "employee": generate_employee_sheet,
+        "consultant": generate_consultant_sheet,
+        "bank": generate_bank_sheet,
+        "tds": generate_tds_sheet,
+    }
+    
+    if type not in generators:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid sheet type.")
+        
+    return generators[type](db, run, company, is_preview=True)
 
 
 # ── Payroll Export Download ──────────────────────────────────────────────────
@@ -776,3 +817,36 @@ def update_employee_tds_config(employee_id: UUID, config_id: UUID, payload: Empl
         ) from exc
     db.refresh(config)
     return _tds_response(config)
+
+
+from app.services.payroll_computation import preview_salary_breakdown
+
+@router.get("/preview-breakdown", dependencies=[Depends(require_permissions("payroll:view"))])
+def preview_breakdown(
+    employee_id: UUID,
+    salary: float,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    employee = db.get(Employee, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    config = db.query(PayrollConfig).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Payroll configuration missing")
+
+    try:
+        result = preview_salary_breakdown(db, employee, config, salary)
+        if result is None:
+            # Fallback mock for incomplete setups
+            return {
+                "earnings": {"BASE_PAY": salary},
+                "deductions": {},
+                "employer_contributions": {},
+                "net_pay": salary,
+                "gross_salary": salary
+            }
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -82,8 +82,19 @@ def apply_leave(
             reason=payload.reason,
             requested_by=current_user.id,
         )
+        req_payload = leave_request_payload(request, employee)
+        
+        from app.agents.approval_agent.service import ApprovalEngineService
+        ApprovalEngineService(db).create_approval(
+            module_name="leave",
+            action_name="approve",
+            payload_json={"command": "Manual UI Leave Request", "requests": [req_payload]},
+            approval_reason="Leave approval affects leave balances, attendance, and payroll inputs.",
+            requested_by=current_user.id,
+        )
+        
         db.commit()
-        return leave_request_payload(request, employee)
+        return req_payload
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

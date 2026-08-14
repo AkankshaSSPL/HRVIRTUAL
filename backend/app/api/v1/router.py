@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
 )
 from app.api.v1.endpoints import payroll as payroll_endpoints
 from app.api.v1.endpoints import seats
+from app.api.v1.endpoints import audit_logs
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -40,3 +41,4 @@ api_router.include_router(salary_assignments.router, prefix="/salary-assignments
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
+api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])

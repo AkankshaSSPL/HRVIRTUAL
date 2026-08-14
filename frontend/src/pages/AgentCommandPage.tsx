@@ -416,7 +416,7 @@ function BusinessResponse({
         />
       );
     }
-    return <MissingFieldCard title={structuredResponse.title} summary={structuredResponse.summary} labels={labels} draft={{ ...(structuredResponse.draft as CandidateCardData), field_sources: structuredResponse.field_sources }} />;
+    return <MissingFieldCard title={structuredResponse.title} summary={structuredResponse.summary} labels={labels} draft={{ ...(structuredResponse.draft as CandidateCardData), field_sources: structuredResponse.field_sources }} onAction={onSend} />;
   }
   if (structuredResponse?.type === "onboarding_summary") {
     return (
@@ -469,7 +469,8 @@ function BusinessResponse({
     );
   }
   if (structuredResponse?.type === "status_banner") {
-    return <StatusBannerCard title={structuredResponse.title ?? "Employee operation"} summary={structuredResponse.summary ?? responseText(workflow, message)} agent={message.agent_name ?? String(message.metadata?.agent ?? "employee_agent")} />;
+    const sr = structuredResponse as any;
+    return <StatusBannerCard title={structuredResponse.title ?? "Employee operation"} summary={structuredResponse.summary ?? responseText(workflow, message)} agent={message.agent_name ?? String(message.metadata?.agent ?? "employee_agent")} variant={sr.variant as "error" | "default" | undefined} />;
   }
   if (structuredResponse?.type === "attendance_summary") {
     return (

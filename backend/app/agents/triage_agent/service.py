@@ -72,12 +72,16 @@ Call classify_intent with exactly one intent. Do not answer the user.
 "onboard Raj as engineer"                 → "onboarding"
 "hire Priya as developer"                 → "onboarding"
 "show Rahul's profile"                    → "employee_profile"
+"show leave balance for Gunesh"           → "leave_balance"
 "approve Rohan's leave"                   → "leave_approve"
+"who is on leave today"                   → "leave_calendar"
 "generate payroll for July"              → "generate_payroll"
 "show salary breakup for Priya"          → "salary_breakup"
 "give Rahul a 10 percent raise"          → "revise_salary"
 "mark Priya present today"               → "mark_attendance"
 "who was absent yesterday"               → "absent_employees"
+"Rahul's attendance this month"          → "attendance_summary"
+"show my attendance"                     → "attendance_summary"
 "what salary structure does Priya have"  → "inspect_salary_structures"
 "create a new salary component Basic"    → "create_salary_component"
 "create a pay type Intern"               → "create_pay_type"
@@ -95,6 +99,13 @@ class TriageAgent:
     def classify(
         self, message: str, history: list[dict], session_active_agent: str | None
     ) -> str:
+        # Fast path bypass for performance
+        normalized_msg = message.lower()
+        if "who was absent" in normalized_msg or "who is absent" in normalized_msg or "absent today" in normalized_msg:
+            return "absent_employees"
+        if "attendance" in normalized_msg:
+            return "attendance_summary"
+            
         system = TRIAGE_SYSTEM_PROMPT
         if session_active_agent:
             system += f"\n\nCurrent session active_agent: {session_active_agent}"

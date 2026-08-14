@@ -141,8 +141,7 @@ def evaluate_pay_type_rule(
 
     # Dynamic statutory handlers
     if calc_type == "STATUTORY_EPF":
-        basic = float(resolved.get("BASIC", 0))
-        epf_wages = min(basic, float(config.epf_wage_cap))
+        epf_wages = float(config.epf_wage_cap)
         return float(_rupee(epf_wages * float(config.epf_employee_rate)))
 
     if calc_type == "STATUTORY_PT":
@@ -212,13 +211,24 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
         resolved["CTC"] = gross
         resolved["GROSS"] = gross
 
+        raw_resolved = {"CTC": gross, "GROSS": gross}
+
         # Process standard salary structure items
         items = sorted(structure.items, key=lambda x: x.sort_order)
         for item in items:
             component = get_component(db, item.component_code)
             if not component:
                 continue
-            raw = evaluate_component(item, component, resolved, gross)
+            raw = evaluate_component(item, component, raw_resolved, gross)
+            raw_resolved[item.component_code] = raw
+            
+            # Immediately calculate RAW Employer PF when BASIC is evaluated 
+            # so that subsequent formulas (like Medical Allowance) can use it for CTC balancing.
+            if item.component_code == "BASIC":
+                epf_wages_raw = float(config.epf_wage_cap)
+                employer_pf_raw = _rupee(epf_wages_raw * float(config.epf_employer_rate))
+                raw_resolved["EMPLOYER_PF"] = employer_pf_raw
+                
             prorated_val = _rupee(raw * ratio)
             resolved[item.component_code] = prorated_val
             
@@ -229,10 +239,9 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
                 employer_contribs[item.component_code] = prorated_val
 
         # Employer PF contribution
-        basic = float(earnings.get("BASIC", 0))
-        epf_wages = min(basic, float(config.epf_wage_cap))
-        # 1.61% represents standard EPF admin charges (EDLI, EPF admin, etc.)
-        employer_pf = _rupee(epf_wages * (float(config.epf_employer_rate) + 0.0161))
+        epf_wages = float(config.epf_wage_cap)
+        # config.epf_employer_rate already includes admin charges (seeded as 0.1361)
+        employer_pf = _rupee(epf_wages * float(config.epf_employer_rate))
         employer_contribs["EMPLOYER_PF"] = employer_pf
 
         # Strictly cap EPF at the statutory wage limit
@@ -306,6 +315,7 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
         "lop_days": lop_days,
         "pro_rate_ratio": round(ratio, 4),
         "gross_salary": gross,
+        "ctc": gross,
         "earnings": earnings,
         "employer_contributions": employer_contribs,
         "statutory_deductions": deductions,
@@ -313,7 +323,7 @@ def compute_employee_payroll(db: Session, employee: Employee, config: PayrollCon
         "gross_earnings": gross_earnings,
         "total_deductions": total_deductions,
         "net_salary": net_salary,
-        "_row_gross_salary": gross,
+        "_row_gross_salary": gross_earnings if pay_basis == "STRUCTURE" else gross,
         "_row_deductions": total_deductions,
         "_row_lop_days": lop_days,
         "_row_net_salary": net_salary,
@@ -358,3 +368,102 @@ def compute_payroll_run(db: Session, month: int, year: int) -> tuple[list[dict],
         })
 
     return line_items, skipped
+
+def preview_salary_breakdown(db: Session, employee: Employee, config: PayrollConfig, gross_salary: float) -> dict | None:
+    # Retrieve matching PayType master
+    emp_type_code = employee.employment_type or "FULL_TIME"
+    pay_type = db.scalar(
+        select(PayType).where(PayType.code == emp_type_code, PayType.active == True, PayType.deleted_at.is_(None))
+    )
+
+    pay_basis = pay_type.pay_basis if pay_type else ("FLAT_FEE" if emp_type_code == "CONSULTANT" else "STRUCTURE")
+    
+    # Fake 100% attendance
+    base_days = float(config.employee_base_working_days)
+    if pay_type and str(pay_type.proration_basis).strip().upper() == "FIXED_BASE_DAYS":
+        base_days = float(pay_type.base_working_days or config.consultant_base_working_days)
+
+    resolved: dict = {}
+    earnings: dict[str, float] = {}
+    deductions: dict[str, float] = {}
+    employer_contribs: dict[str, float] = {}
+
+    if pay_basis == "STRUCTURE":
+        assignment = get_active_assignment(db, employee.id, date.today())
+        if not assignment:
+            # Try to grab the first structure or fallback
+            structure = db.query(SalaryStructure).first()
+            if not structure:
+                return None
+        else:
+            structure = db.get(SalaryStructure, assignment.salary_structure_id)
+
+        gross = gross_salary
+        resolved["CTC"] = gross
+        resolved["GROSS"] = gross
+
+        raw_resolved = {"CTC": gross, "GROSS": gross}
+
+        items = sorted(structure.items, key=lambda x: x.sort_order)
+        for item in items:
+            component = get_component(db, item.component_code)
+            if not component:
+                continue
+            raw = evaluate_component(item, component, raw_resolved, gross)
+            raw_resolved[item.component_code] = raw
+            
+            if item.component_code == "BASIC":
+                epf_wages_raw = float(config.epf_wage_cap)
+                employer_pf_raw = _rupee(epf_wages_raw * float(config.epf_employer_rate))
+                raw_resolved["EMPLOYER_PF"] = employer_pf_raw
+                
+            prorated_val = _rupee(raw)
+            resolved[item.component_code] = prorated_val
+            
+            comp_type = (component.type or "").upper()
+            if comp_type == "EARNING":
+                earnings[item.component_code] = prorated_val
+            elif comp_type == "EMPLOYER_CONTRIBUTION":
+                employer_contribs[item.component_code] = prorated_val
+
+        epf_wages = float(config.epf_wage_cap)
+        employer_pf = _rupee(epf_wages * float(config.epf_employer_rate))
+        employer_contribs["EMPLOYER_PF"] = employer_pf
+        deductions["EPF"] = _rupee(epf_wages * float(config.epf_employee_rate))
+
+    else:
+        gross = gross_salary
+        resolved["GROSS"] = gross
+        earnings["BASE_PAY"] = _rupee(gross)
+
+    now = date.today()
+    if pay_type and pay_type.rules:
+        active_rules = [r for r in pay_type.rules if r.deleted_at is None]
+        for rule in sorted(active_rules, key=lambda x: x.sequence or 0):
+            if (rule.calc_type or "").upper() in ["STATUTORY_EPF", "STATUTORY_PT", "STATUTORY_TDS", "FLAT_TDS", "LEAVE_DEDUCTION"]:
+                if (rule.calc_type or "").upper() == "STATUTORY_PT":
+                    val = float(PayrollConfigService(db).get_professional_tax(now.month))
+                elif (rule.calc_type or "").upper() == "STATUTORY_TDS":
+                    val = float(get_monthly_tds(db, employee.id, now.month, now.year))
+                else:
+                    val = evaluate_pay_type_rule(rule, resolved, gross, config, employee, db, now.month, now.year, base_days, base_days)
+                val = _rupee(val)
+                resolved[rule.code] = val
+                if (rule.kind or "").upper() == "DEDUCTION":
+                    deductions[rule.code] = val
+                elif (rule.kind or "").upper() == "EARNING":
+                    earnings[rule.code] = val
+                elif (rule.kind or "").upper() == "EMPLOYER_CONTRIBUTION":
+                    employer_contribs[rule.code] = val
+
+    total_earnings = sum(earnings.values())
+    total_deductions = sum(deductions.values())
+    net_pay = max(0.0, total_earnings - total_deductions)
+
+    return {
+        "earnings": earnings,
+        "deductions": deductions,
+        "employer_contributions": employer_contribs,
+        "net_pay": net_pay,
+        "gross_salary": gross
+    }

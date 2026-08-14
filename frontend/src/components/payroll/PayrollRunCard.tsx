@@ -6,6 +6,7 @@ import { Download, FileSpreadsheet, CheckCircle, Clock, X, Eye } from "lucide-re
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getPayrollLopAudit, type LopAuditRecord } from "@/services/payroll";
+import { PayrollPreviewModal } from "./PayrollPreviewModal";
 
 interface PayrollRunCardProps {
   runId: string;
@@ -48,11 +49,14 @@ export function PayrollRunCard({
     queryFn: () => getPayrollLopAudit(runId, lopFilter),
     enabled: lopOpen,
   });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewType, setPreviewType] = useState<"employee" | "consultant" | "tds" | "bank" | null>(null);
+  const isApproved = status === "APPROVED" || status === "BANK_SHEET_GENERATED" || status === "COMPLETED";
 
   const exports = [
-    { type: "employee" as const, label: "Employee Sheet" },
-    { type: "consultant" as const, label: "Consultant Sheet" },
-    { type: "tds" as const, label: "TDS Sheet" },
+    { type: "employee" as const, label: "Employee Sheet", requiresApproval: true },
+    { type: "consultant" as const, label: "Consultant Sheet", requiresApproval: true },
+    { type: "tds" as const, label: "TDS Sheet", requiresApproval: true },
     { type: "bank" as const, label: "Bank Sheet", requiresApproval: true },
   ];
 
@@ -92,15 +96,16 @@ export function PayrollRunCard({
         <p className="text-xs font-medium text-muted-foreground">Export Sheets</p>
         <div className="flex flex-wrap gap-2">
           {exports.map((exp) => {
-            const locked = Boolean(exp.requiresApproval) && exportsLocked;
+            const locked = Boolean(exp.requiresApproval) && !isApproved;
             return (
               <Button
                 key={exp.type}
                 size="sm"
                 variant="outline"
-                disabled={locked}
-                onClick={() => !locked && onExport(exp.type)}
-                className={cn(locked && "opacity-40")}
+                onClick={() => {
+                  setPreviewType(exp.type);
+                  setPreviewOpen(true);
+                }}
               >
                 <Download className="h-3 w-3 mr-1.5" />
                 {exp.label}
@@ -122,7 +127,7 @@ export function PayrollRunCard({
           </p>
           <Button size="sm" onClick={onSubmitApproval}>
             <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-            Submit for Approval
+            Seek Approval
           </Button>
         </div>
       )}
@@ -130,7 +135,7 @@ export function PayrollRunCard({
       {status === "PENDING_APPROVAL" && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
           <Clock className="h-3.5 w-3.5 shrink-0" />
-          Awaiting finance approval. Bank sheet will unlock after approval.
+          Awaiting finance approval. All sheets will unlock after approval.
         </div>
       )}
 
@@ -183,6 +188,18 @@ export function PayrollRunCard({
           )}
         </div>
       )}
+
+      <PayrollPreviewModal 
+        open={previewOpen} 
+        onClose={() => setPreviewOpen(false)}
+        runId={runId}
+        type={previewType}
+        isApproved={isApproved}
+        onDownload={() => {
+          if (previewType) onExport(previewType);
+          setPreviewOpen(false);
+        }}
+      />
     </div>
   );
 }

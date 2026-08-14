@@ -54,7 +54,7 @@ class EmployeeCreateRequest(BaseModel):
     department_id: UUID | None = None
     designation_id: UUID
     reporting_manager_id: UUID | None = None
-    official_email: EmailStr | None = None
+    official_email: EmailStr
     personal_email: EmailStr
     phone: str
     dob: date

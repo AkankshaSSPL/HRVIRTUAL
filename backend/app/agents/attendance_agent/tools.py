@@ -28,6 +28,14 @@ def parse_month_year(command: str) -> tuple[int, int]:
 
 
 def employee_query(command: str) -> str | None:
+    match = re.search(r"([A-Za-z][A-Za-z\s.]*?)'s\s+attendance", command, re.IGNORECASE)
+    if match and match.group(1).lower().strip() not in ("my", "his", "her", "their", "the", "an", "a"):
+        return match.group(1).strip()
+        
+    match = re.search(r"attendance\s+of\s+([A-Za-z][A-Za-z\s.]*)", command, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+        
     match = re.search(r"(?:show|record|calculate|mark|open|regularize|correct)\s+([A-Za-z][A-Za-z\s.]*?)\s+(?:as\s+)?(?:attendance|lop|present|absent|half day|half-day|wfh|work from home)", command, re.IGNORECASE)
     return match.group(1).strip() if match else None
 
@@ -57,7 +65,7 @@ def parse_attendance_date(command: str) -> date:
         return date.today() - timedelta(days=1)
     if re.search(r"\btomorrow\b", command, re.IGNORECASE):
         return date.today() + timedelta(days=1)
-    day_month = re.search(r"\b(\d{1,2})\s+(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\b", command, re.IGNORECASE)
+    day_month = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\b", command, re.IGNORECASE)
     if day_month:
         months = {name.lower(): idx for idx, names in enumerate([(), ("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",), ("jun", "june"), ("jul", "july"), ("aug", "august"), ("sep", "september"), ("oct", "october"), ("nov", "november"), ("dec", "december")]) for name in names}
         return date(date.today().year, months[day_month.group(2).lower()], int(day_month.group(1)))
@@ -181,7 +189,7 @@ def attendance_summary(db: Session, *, employee: Employee, month: int, year: int
 def absent_on(db: Session, target_date: date) -> list[dict[str, Any]]:
     records = db.scalars(
         select(AttendanceRecord)
-        .where(AttendanceRecord.attendance_date == target_date, AttendanceRecord.status == AttendanceStatus.ABSENT, AttendanceRecord.deleted_at.is_(None))
+        .where(AttendanceRecord.attendance_date == target_date, AttendanceRecord.status == AttendanceStatus.ABSENT.value, AttendanceRecord.deleted_at.is_(None))
         .order_by(AttendanceRecord.created_at.desc())
     )
     return [attendance_record_payload(record, record.employee) for record in records]

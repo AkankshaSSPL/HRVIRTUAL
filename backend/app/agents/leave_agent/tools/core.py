@@ -78,6 +78,38 @@ def parse_leave_policy(command: str) -> dict[str, Any]:
 
 
 def parse_leave_dates(command: str) -> tuple[date, date]:
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
+    from datetime import date, timedelta
+
+    logger = logging.getLogger(__name__)
+
+    class LeaveDateExtraction(BaseModel):
+        start_date: str | None
+        end_date: str | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(LeaveDateExtraction)
+        prompt = f"""
+Extract the start and end dates for the leave request from this command: "{command}"
+Today is {date.today().isoformat()}.
+- If the user specifies a duration and a month (e.g. "2 days in July"), pick the next upcoming working days in that month, but normally they just give specific dates. Actually, if they say "2 days in July", just guess the first 2 working days of July (e.g. 2026-07-01 to 2026-07-02).
+- Return start_date and end_date in YYYY-MM-DD format.
+- If only one date is mentioned, start_date and end_date should be the same.
+- If it's relative like 'tomorrow', calculate it based on today.
+"""
+        result = structured_model.invoke(prompt)
+        
+        if result and result.start_date:
+            start = date.fromisoformat(result.start_date)
+            end = date.fromisoformat(result.end_date) if result.end_date else start
+            return start, end
+    except Exception:
+        logger.exception("LLM extraction failed for parse_leave_dates, falling back to regex")
+
     iso_dates = re.findall(r"\b(20\d{2}-\d{2}-\d{2})\b", command)
     if len(iso_dates) >= 2:
         return date.fromisoformat(iso_dates[0]), date.fromisoformat(iso_dates[1])
@@ -127,9 +159,32 @@ def parse_leave_type(command: str) -> str:
 
 
 def employee_query(command: str) -> str | None:
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
+    
+    logger = logging.getLogger(__name__)
+
     normalized = command.lower()
     if "pending" in normalized and ("leave" in normalized or "approval" in normalized) and " for " not in normalized:
         return None
+
+    class EmployeeNameExtraction(BaseModel):
+        employee_name: str | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(EmployeeNameExtraction)
+        result = structured_model.invoke(f"Extract the name of the employee this leave request or query is for from the following command: {command}")
+        
+        if result and result.employee_name:
+            if result.employee_name.lower() in {"pending", "team", "all", "me", "my", "myself", "i"}:
+                return None
+            return result.employee_name
+    except Exception:
+        logger.exception("LLM extraction failed for employee_query, falling back to regex")
+
     patterns = [
         r"(?:leave\s+)?(?:balance|history|calendar)\s+for\s+([A-Za-z][A-Za-z\s.]*?)$",
         r"(?:for|balance for|history for|calendar for)\s+([A-Za-z][A-Za-z\s.]*?)(?=\s+(?:from|on|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|balance|history|$))",
@@ -140,7 +195,7 @@ def employee_query(command: str) -> str | None:
         match = re.search(pattern, command, re.IGNORECASE)
         if match:
             value = match.group(1).strip()
-            if value.lower() in {"pending", "team", "all"}:
+            if value.lower() in {"pending", "team", "all", "me", "my", "myself", "i"}:
                 return None
             return value
     return None

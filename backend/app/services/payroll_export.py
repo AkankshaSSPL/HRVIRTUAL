@@ -12,6 +12,34 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.payroll import CompanySettings, PayrollRun, PayrollRunItem
 
+class MockWorksheet:
+    def __init__(self, title="Sheet"):
+        self.title = title
+        self.rows = []
+        self.max_row = 1
+
+    def append(self, row):
+        self.rows.append(row)
+        self.max_row += 1
+        
+    def __getitem__(self, item):
+        class MockCell:
+            font = None
+        return [MockCell()]
+
+class MockWorkbook:
+    def __init__(self):
+        self.active = MockWorksheet()
+        self.sheets = [self.active]
+
+    def create_sheet(self, title):
+        ws = MockWorksheet(title)
+        self.sheets.append(ws)
+        return ws
+
+    def save(self, *args):
+        pass
+
 def _make_last_row_bold(ws):
     bold_font = Font(bold=True)
     for cell in ws[ws.max_row]:
@@ -60,11 +88,11 @@ def _employee_name(item: PayrollRunItem) -> str:
     return name or emp.employee_code or str(emp.id)
 
 
-def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
+def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings, is_preview: bool = False) -> str | dict:
     """FULL_TIME employees — component-level breakdown from breakdown_json."""
     items = [i for i in _load_items_with_employees(db, payroll_run) if (i.breakdown_json or {}).get("employment_type") == "FULL_TIME"]
 
-    wb = Workbook()
+    wb = MockWorkbook() if is_preview else Workbook()
     ws = wb.active
     ws.title = "Employee Salary Sheet"
     ws.append([company.company_name])
@@ -84,7 +112,7 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
     ws.append(headers)
     _make_last_row_bold(ws)
 
-    totals = { "CTC": 0, "BASIC": 0, "HRA": 0, "CA": 0, "EDU": 0, "MED": 0, "EmployerPF": 0, "WAGES": 0, "EPF": 0, "PT": 0, "TDS": 0, "TotalDed": 0, "Net": 0 }
+    totals = { "EmployerPF": 0, "WAGES": 0, "EPF": 0, "VPF": 0, "ExtraPay": 0, "PT": 0, "AdvanceDed": 0, "TotalDed": 0, "Net": 0 }
 
     for idx, item in enumerate(items, 1):
         bd = item.breakdown_json or {}
@@ -121,39 +149,38 @@ def generate_employee_sheet(db: Session, payroll_run: PayrollRun, company: Compa
             bd.get("net_salary", 0),
             "", "", "", "", ""
         ])
-        totals["CTC"] += bd.get("gross_salary", 0)
-        totals["BASIC"] += earnings.get("BASIC", 0)
-        totals["HRA"] += earnings.get("HRA", 0)
-        totals["CA"] += earnings.get("CA", 0)
-        totals["EDU"] += earnings.get("EA", 0)
-        totals["MED"] += earnings.get("MA", 0)
         totals["EmployerPF"] += employer.get("EMPLOYER_PF", 0)
         totals["WAGES"] += wages
         totals["EPF"] += epf_val
+        totals["VPF"] += 0
+        totals["ExtraPay"] += 0
         totals["PT"] += deductions.get("PROFESSIONAL_TAX", 0)
-        totals["TDS"] += deductions.get("TDS", 0)
+        totals["AdvanceDed"] += 0
         totals["TotalDed"] += bd.get("total_deductions", 0)
         totals["Net"] += bd.get("net_salary", 0)
 
     # Total Row
     ws.append([
         "Total", "", "", 
-        totals["CTC"], totals["BASIC"], totals["HRA"], totals["CA"], totals["EDU"], totals["MED"],
-        totals["EmployerPF"], totals["WAGES"], totals["EPF"], 0, 0, 0,
-        totals["PT"], totals["TDS"], 0, 0, 0, totals["TotalDed"], totals["Net"],
+        "", "", "", "", "", "",
+        totals["EmployerPF"], totals["WAGES"], totals["EPF"], totals["VPF"], "", totals["ExtraPay"],
+        totals["PT"], "", "", "", totals["AdvanceDed"], totals["TotalDed"], totals["Net"],
         "", "", "", "", ""
     ])
+
+    if is_preview:
+        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
 
     filename = _new_filename("employee", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)
     return filename
 
 
-def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
+def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings, is_preview: bool = False) -> str | dict:
     """CONSULTANT employees — fee/leave/TDS breakdown from breakdown_json."""
     items = [i for i in _load_items_with_employees(db, payroll_run) if (i.breakdown_json or {}).get("employment_type") == "CONSULTANT"]
 
-    wb = Workbook()
+    wb = MockWorkbook() if is_preview else Workbook()
     ws = wb.active
     ws.title = "Consultant Sheet"
     
@@ -202,16 +229,19 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
             "", ""
         ])
 
+    if is_preview:
+        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
+
     filename = _new_filename("consultant", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)
     return filename
 
 
-def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
+def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings, is_preview: bool = False) -> str | dict:
     """Bank upload sheet — matching provided formatting."""
     items = _load_items_with_employees(db, payroll_run)
 
-    wb = Workbook()
+    wb = MockWorkbook() if is_preview else Workbook()
     ws = wb.active
     ws.title = "Bank Sheet"
     
@@ -245,18 +275,21 @@ def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySe
             default_remark # Remarks
         ])
 
+    if is_preview:
+        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
+
     filename = _new_filename("bank", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)
     return filename
 
 
-def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings) -> str:
+def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings, is_preview: bool = False) -> str | dict:
     """Two tabs — Employee TDS and Consultant TDS — matching specific formats."""
     items = _load_items_with_employees(db, payroll_run)
     employee_items = [i for i in items if (i.breakdown_json or {}).get("employment_type") == "FULL_TIME"]
     consultant_items = [i for i in items if (i.breakdown_json or {}).get("employment_type") == "CONSULTANT"]
 
-    wb = Workbook()
+    wb = MockWorkbook() if is_preview else Workbook()
     
     month_str = calendar.month_name[payroll_run.month]
     year_str = str(payroll_run.year)
@@ -339,6 +372,9 @@ def generate_tds_sheet(db: Session, payroll_run: PayrollRun, company: CompanySet
     ws2.append(["", "Office Rent", 0, 0, 0, "", 0, 0])
     ws2.append([])
     ws2.append(["", "TDS of Consultant + TDS for Office Rent =", f"₹ {cons_tds_total}"])
+
+    if is_preview:
+        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
 
     filename = _new_filename("tds", payroll_run.month, payroll_run.year)
     wb.save(STORAGE_DIR / filename)

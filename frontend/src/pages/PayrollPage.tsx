@@ -10,6 +10,7 @@ import { SalaryStructureModal } from "@/components/payroll/SalaryStructureModal"
 import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
 import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
 import { PayrollSettingsTab } from "@/components/payroll/PayrollSettingsTab";
+import { apiDownloadFile } from "@/services/api";
 import {
   createSalaryComponent,
   deleteSalaryComponent,
@@ -116,7 +117,7 @@ export function PayrollPage() {
       if (existing) {
         setDismissedRuns((prev) => {
           const next = new Set(prev);
-          next.delete(existing.id);
+          next.add(existing.id);
           return next;
         });
       }
@@ -134,9 +135,16 @@ export function PayrollPage() {
 
   const exportRunMutation = useMutation({
     mutationFn: ({ runId, type }: { runId: string; type: "employee" | "consultant" | "bank" | "tds" }) => exportPayrollSheet(runId, type),
-    onSuccess: (result, variables) => {
+    onSuccess: async (result, variables) => {
       const typeLabels: Record<string, string> = { employee: "Employee Sheet", consultant: "Consultant Sheet", bank: "Bank Sheet", tds: "TDS Sheet" };
       setExportResults((prev) => ({ ...prev, [variables.runId]: { title: typeLabels[variables.type], ...result } }));
+      
+      try {
+        await apiDownloadFile(result.download_url, result.filename);
+      } catch (err) {
+        setRunError("Unable to auto-download the file.");
+      }
+
       if (variables.type === "bank") {
         queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       }

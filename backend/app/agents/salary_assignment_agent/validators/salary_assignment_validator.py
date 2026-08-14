@@ -11,6 +11,8 @@ def validate_assignment_request(*, employee_name: str, structure_name: str, gros
         missing.append("salary structure")
     if gross_salary is None:
         missing.append("gross salary")
+    elif gross_salary <= 0:
+        missing.append("a positive gross salary amount")
     if effective_from is None:
         missing.append("effective date")
     return missing

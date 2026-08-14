@@ -192,6 +192,13 @@ export function exportPayrollSheet(runId: string, type: "employee" | "consultant
   return apiPost<{ filename: string; download_url: string }>(`/payroll/runs/${runId}/export`, { type });
 }
 
+export type PreviewTab = { name: string; rows: any[][] };
+export type PreviewData = { tabs: PreviewTab[] };
+
+export function getPayrollPreview(runId: string, type: "employee" | "consultant" | "bank" | "tds") {
+  return apiGet<PreviewData>(`/payroll/runs/${runId}/preview?type=${type}`);
+}
+
 // ── Pay Types ──────────────────────────────────────────────────────────────
 export type PayTypeRuleRecord = {
   id: string;
@@ -280,4 +287,16 @@ export type LopAuditRecord = {
 export function getPayrollLopAudit(runId: string, filterType?: "ALL" | "EMPLOYEE" | "CONSULTANT") {
   const query = filterType && filterType !== "ALL" ? `?filter_type=${filterType}` : "";
   return apiGet<LopAuditRecord[]>(`/payroll/runs/${runId}/lop-audit${query}`);
+}
+
+export type PreviewSalaryBreakdownResponse = {
+  earnings: Record<string, number>;
+  deductions: Record<string, number>;
+  employer_contributions: Record<string, number>;
+  net_pay: number;
+  gross_salary: number;
+};
+
+export function previewSalaryBreakdown(employeeId: string, salary: number) {
+  return apiGet<PreviewSalaryBreakdownResponse>(`/payroll/preview-breakdown?employee_id=${employeeId}&salary=${salary}`);
 }

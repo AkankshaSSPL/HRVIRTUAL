@@ -36,10 +36,59 @@ def _strip_component_action(command: str) -> str:
 
 
 def parse_salary_component_command(command: str) -> dict[str, Any]:
-    command = _strip_component_action(command)
-    normalized = command.lower()
+    command_stripped = _strip_component_action(command)
+    
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
 
-    split = re.split(r"\s+(?:as|with|to)\s+", command, maxsplit=1, flags=re.IGNORECASE)
+    logger = logging.getLogger(__name__)
+
+    class SalaryComponentExtraction(BaseModel):
+        name: str | None
+        type: str | None
+        calculation_type: str | None
+        calculation_value: float | None
+        formula: str | None
+        reference_component_code: str | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(SalaryComponentExtraction)
+        prompt = f"""
+Extract salary component details from this command: "{command_stripped}"
+- name: The name of the component (e.g., "Health Insurance", "Transport Allowance")
+- type: 'earning', 'deduction', or 'employer_contribution'. Look for words like 'allowance', 'deduction', 'pf', 'tax' to decide.
+- calculation_type: 'fixed', 'percentage', or 'formula'.
+- calculation_value: The numerical value (amount or percentage).
+- formula: Any explicit formula mentioned.
+- reference_component_code: The base component it applies to (e.g., 'BASIC' if '5% of basic').
+"""
+        result = structured_model.invoke(prompt)
+        
+        if result and result.name:
+            code = normalize_code(result.name) or "SALARY_COMPONENT"
+            type_val = result.type or "earning"
+            type_val = STANDARD_COMPONENT_TYPES.get(code, type_val)
+            
+            return {
+                "name": result.name,
+                "code": code,
+                "type": type_val,
+                "calculation_type": result.calculation_type or "fixed",
+                "calculation_value": result.calculation_value,
+                "formula": result.formula,
+                "reference_component_code": normalize_code(result.reference_component_code) if result.reference_component_code else None,
+                "taxable": type_val != "deduction",
+                "active": True,
+            }
+    except Exception:
+        logger.exception("LLM extraction failed for parse_salary_component_command, falling back to regex")
+
+    normalized = command_stripped.lower()
+
+    split = re.split(r"\s+(?:as|with|to)\s+", command_stripped, maxsplit=1, flags=re.IGNORECASE)
     name = split[0].strip()
     spec = split[1].strip() if len(split) > 1 else ""
     if not spec:
@@ -110,8 +159,12 @@ def parse_salary_component_command(command: str) -> dict[str, Any]:
 
 def validate_salary_component_data(component_data: dict[str, Any]) -> list[str]:
     calculation_type = component_data.get("calculation_type")
-    if calculation_type == "percentage" and component_data.get("calculation_value") is None:
-        return ["percentage value"]
+    if calculation_type == "percentage":
+        val = component_data.get("calculation_value")
+        if val is None:
+            return ["percentage value"]
+        if val <= 0 or val > 100:
+            return ["valid percentage strictly between 0 and 100"]
     if calculation_type == "fixed" and component_data.get("calculation_value") is None:
         return ["fixed amount"]
     if calculation_type == "formula" and not component_data.get("formula"):

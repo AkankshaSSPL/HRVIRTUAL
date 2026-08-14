@@ -330,6 +330,16 @@ class OnboardingAgent(BaseAgent):
         }
 
     def _start_onboarding(self, *, parsed: dict[str, Any], command: str, user_id: UUID | None, workflow_id: str, conversational: bool) -> dict[str, Any]:
+        email = parsed.get("personal_email") or parsed.get("email")
+        phone = parsed.get("phone")
+        
+        if email:
+            if self.db.scalar(select(Employee.id).where(Employee.personal_email == email, Employee.deleted_at.is_(None))):
+                return self._status_response("Duplicate Email", f"The email {email} is already registered to an active employee.")
+        if phone:
+            if self.db.scalar(select(Employee.id).where(Employee.phone == phone, Employee.deleted_at.is_(None))):
+                return self._status_response("Duplicate Phone", f"The phone number {phone} is already registered to an active employee.")
+
         candidate = create_candidate_profile(self.db, parsed)
         candidate_payload = candidate_to_payload(candidate)
         candidate_payload.update(

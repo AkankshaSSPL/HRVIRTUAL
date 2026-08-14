@@ -378,7 +378,11 @@ class CoordinatorRuntimeService:
                                        entity_type="employee_onboarding")
             elif sr.get("type") == "confirmation_card":
                 session_mgr.set_active(session, "employee_agent")
-            elif sr.get("completed") or route["agent_name"] not in {"onboarding_agent", "employee_agent"}:
+            elif sr.get("type") in {"employee_card", "employee_profile", "attendance_summary"}:
+                emp_id = sr.get("employee", {}).get("id") or sr.get("payload", {}).get("employee_id") or sr.get("summary", {}).get("employee_id")
+                if emp_id:
+                    session_mgr.set_active(session, route["agent_name"], entity_id=UUID(str(emp_id)), entity_type="employee")
+            elif sr.get("completed") or route["agent_name"] not in {"onboarding_agent", "employee_agent", "attendance_agent", "leave_agent", "payroll_agent", "salary_structure_agent", "salary_assignment_agent"}:
                 session_mgr.clear_active(session)
 
             run.metadata_json = {
@@ -538,22 +542,34 @@ class CoordinatorRuntimeService:
             )
             step_name = "onboarding_agent_execution"
         elif route["agent_name"] == "attendance_agent":
-            result = AttendanceAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = AttendanceAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "attendance_agent_execution"
         elif route["agent_name"] == "leave_agent":
-            result = LeaveAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = LeaveAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "leave_agent_execution"
         elif route["agent_name"] == "payroll_agent":
-            result = PayrollAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = PayrollAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "payroll_agent_execution"
         elif route["agent_name"] == "salary_assignment_agent":
-            result = SalaryAssignmentAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = SalaryAssignmentAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "salary_assignment_agent_execution"
         elif route["agent_name"] == "salary_structure_agent":
-            result = SalaryStructureAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = SalaryStructureAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "salary_structure_agent_execution"
         else:
-            result = EmployeeAgent(self.db).execute(action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id)
+            result = EmployeeAgent(self.db).execute(
+                action=route["action"], command=command, user_id=context.user_id, workflow_id=context.workflow_id, history=history, active_entity_id=active_entity_id
+            )
             step_name = "employee_agent_execution"
         result = {
             **result,

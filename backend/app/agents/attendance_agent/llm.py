@@ -32,7 +32,7 @@ class AttendanceFields(BaseModel):
     year: int | None = Field(default=None, description="The numerical year mentioned (e.g. 2026)")
 
 
-def llm_extract_attendance(message: str) -> dict[str, Any]:
+def llm_extract_attendance(message: str, history: list[dict] | None = None) -> dict[str, Any]:
     """Extract attendance fields from a natural-language message. Returns only the
     fields explicitly stated (non-null). Raises on failure so callers can fall back."""
     from langchain_openai import ChatOpenAI
@@ -40,12 +40,17 @@ def llm_extract_attendance(message: str) -> dict[str, Any]:
     model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
     structured = model.with_structured_output(AttendanceFields)
     
+    history_text = "\n".join([f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in history]) if history else "No history."
+
     prompt = f"""You extract attendance query details from an HR user's message for an HRMS.
 Today is {date.today().isoformat()}.
 
+Recent Conversation History:
+{history_text}
+
 Rules:
-- Return ONLY fields explicitly stated or clearly implied in this message. Leave others null.
-- `employee_name`: Extract the full or partial name of the employee the user is asking about.
+- Return ONLY fields explicitly stated or clearly implied in this message or from the Conversation History. Leave others null.
+- `employee_name`: Extract the full or partial name of the employee the user is asking about. Resolve pronouns (e.g., "his", "her", "that employee") using the Conversation History.
 - `target_date`: Normalize dates to ISO YYYY-MM-DD (e.g., resolving "yesterday", "tomorrow", or "today" relative to today).
 - `status`: Map words like "absent", "present", "half day", "wfh", "on duty", "holiday", "leave" to the matching ENUM value exactly: PRESENT, ABSENT, HALF_DAY, WEEKLY_OFF, ON_DUTY, WORK_FROM_HOME, HOLIDAY. If none, leave null.
 - `month`: If a specific month is mentioned ("january", "this month"), extract its numerical value (1-12). If "this month", use today's month.

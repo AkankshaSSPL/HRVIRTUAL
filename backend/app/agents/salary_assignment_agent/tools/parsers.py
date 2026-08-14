@@ -71,13 +71,50 @@ def parse_amount(text: str) -> float | None:
 
 def parse_salary_assignment_command(command: str) -> dict[str, Any]:
     normalized = command.strip()
+    
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    class SalaryAssignmentExtraction(BaseModel):
+        employee_name: str | None
+        structure_name: str | None
+        gross_salary: float | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(SalaryAssignmentExtraction)
+        prompt = f"""
+Extract salary assignment details from this command: "{normalized}"
+- employee_name: The name of the employee (cleanly extract it, remove 's if present. e.g. "Shital's" -> "Shital").
+- structure_name: The name of the salary structure being assigned (if any).
+- gross_salary: The numerical gross salary amount (e.g., 12000, 1500000).
+"""
+        result = structured_model.invoke(prompt)
+        
+        if result and result.employee_name:
+            # Re-use existing regex for amount/date if not found by LLM to be safe
+            amt = result.gross_salary if result.gross_salary is not None else parse_amount(normalized)
+            return {
+                "employee_name": result.employee_name,
+                "structure_name": result.structure_name or "",
+                "gross_salary": amt,
+                "effective_from": parse_effective_date(normalized),
+                "reason": normalized,
+            }
+    except Exception:
+        logger.exception("LLM extraction failed for parse_salary_assignment_command, falling back to regex")
+
     shorthand_match = re.search(
         r"\bsalary\s+structure\s*(?:is|:|-|=)?\s*(?:the\s+)?(?P<structure>[A-Za-z][A-Za-z&./-]*?)\s+(?P<employee>[A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)+)\s+(?:salary|gross|ctc|pay)\b",
         normalized,
     )
     if shorthand_match:
         return {
-            "employee_name": shorthand_match.group("employee").strip(),
+            "employee_name": shorthand_match.group("employee").strip().replace("'s", ""),
             "structure_name": shorthand_match.group("structure").strip(),
             "gross_salary": parse_amount(normalized),
             "effective_from": parse_effective_date(normalized),
@@ -91,7 +128,7 @@ def parse_salary_assignment_command(command: str) -> dict[str, Any]:
     )
     if structure_match:
         structure_name = structure_match.group(1).strip()
-        employee_name = structure_match.group(2).strip()
+        employee_name = structure_match.group(2).strip().replace("'s", "")
     else:
         employee_match = re.search(
             r"\bto\s+([a-z][a-z\s.'-]+?)(?=\s+(?:with|for|effective|from|whose|his|her|gross|salary|ctc|pay|at|on)\b|[,.;]|$)",
@@ -99,7 +136,7 @@ def parse_salary_assignment_command(command: str) -> dict[str, Any]:
             re.IGNORECASE,
         )
         structure_match = re.search(r"assign\s+(.+?)\s+(?:salary\s+)?structure", normalized, re.IGNORECASE)
-        employee_name = employee_match.group(1).strip() if employee_match else ""
+        employee_name = employee_match.group(1).strip().replace("'s", "") if employee_match else ""
         structure_name = structure_match.group(1).strip() if structure_match else ""
         if not employee_name:
             employee_match = re.search(
@@ -107,7 +144,7 @@ def parse_salary_assignment_command(command: str) -> dict[str, Any]:
                 normalized,
                 re.IGNORECASE,
             )
-            employee_name = employee_match.group(1).strip() if employee_match else ""
+            employee_name = employee_match.group(1).strip().replace("'s", "") if employee_match else ""
         if not structure_name:
             structure_match = re.search(
                 r"\b(?:salary\s+structure|structure)\s*(?:is|:|-|=)?\s*(?:the\s+)?([A-Za-z][A-Za-z\s&./-]*?)(?=\s+(?:with|for|effective|from|whose|his|her|gross|salary|ctc|pay|at|on)\b|[,.;]|$)",
@@ -117,7 +154,7 @@ def parse_salary_assignment_command(command: str) -> dict[str, Any]:
             structure_name = structure_match.group(1).strip() if structure_match else ""
 
     return {
-        "employee_name": employee_name,
+        "employee_name": employee_name.replace("'s", ""),
         "structure_name": structure_name,
         "gross_salary": parse_amount(normalized),
         "effective_from": parse_effective_date(normalized),
@@ -126,11 +163,50 @@ def parse_salary_assignment_command(command: str) -> dict[str, Any]:
 
 
 def parse_salary_revision_command(command: str) -> dict[str, Any]:
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    class SalaryRevisionExtraction(BaseModel):
+        employee_name: str | None
+        percent: float | None
+        amount: float | None
+        direction: str | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(SalaryRevisionExtraction)
+        prompt = f"""
+Extract salary revision details from this command: "{command}"
+- employee_name: The name of the employee (remove 's if present).
+- percent: numerical percentage if mentioned (e.g. 10 for 10%).
+- amount: numerical amount if mentioned (e.g. 1000 for $1000).
+- direction: INCREASE or DECREASE.
+"""
+        result = structured_model.invoke(prompt)
+        
+        if result and result.employee_name:
+            # Re-use existing regex for amount/date if not found by LLM
+            amt = result.amount if result.amount is not None else (parse_amount(command) if not result.percent else None)
+            return {
+                "employee_name": result.employee_name,
+                "percent": result.percent,
+                "amount": amt,
+                "effective_from": parse_effective_date(command),
+                "direction": result.direction or ("DECREASE" if "decrease" in command.lower() else "INCREASE"),
+                "reason": command.strip(),
+            }
+    except Exception:
+        logger.exception("LLM extraction failed for parse_salary_revision_command, falling back to regex")
+
     employee_match = re.search(r"(?:increase|decrease|revise|update|change)\s+(.+?)\s+salary", command, re.IGNORECASE)
     percent_match = re.search(r"(\d+(?:\.\d+)?)\s*%", command)
     amount = parse_amount(command)
     return {
-        "employee_name": employee_match.group(1).strip() if employee_match else "",
+        "employee_name": employee_match.group(1).strip().replace("'s", "") if employee_match else "",
         "percent": float(percent_match.group(1)) if percent_match else None,
         "amount": amount if not percent_match else None,
         "effective_from": parse_effective_date(command),

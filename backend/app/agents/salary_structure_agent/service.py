@@ -24,7 +24,7 @@ class SalaryStructureAgent(BaseAgent):
     async def run(self, state):  # pragma: no cover - BaseAgent compatibility
         return {"message": "SalaryStructureAgent requires runtime invocation."}
 
-    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("SalaryStructureAgent requires a database session")
 

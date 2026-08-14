@@ -36,7 +36,7 @@ class SalaryAssignmentAgent(BaseAgent):
             raise RuntimeError("SalaryAssignmentAgent requires a database session")
         return self.execute(action=action, command=payload.get("command", ""), user_id=context.user_id, workflow_id=context.workflow_id)
 
-    def execute(self, *, action: str, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id: UUID | None, workflow_id: str, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("SalaryAssignmentAgent requires a database session")
         service = SalaryAssignmentService(self.db)

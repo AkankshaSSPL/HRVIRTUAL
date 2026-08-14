@@ -167,7 +167,7 @@ export function SeatingAllocationModal({ open, employeeId, currentSeat, onClose,
 
   return (
     <>
-      <DrawerPanel open={open} title="Assign Seat" size="lg" onClose={onClose}>
+      <DrawerPanel open={open} title="Assign Seat" size="2xl" onClose={onClose}>
         <div className="space-y-6">
           <p className="text-sm text-muted-foreground">
             Select an available seat for this employee. Occupied seats are greyed out and can&apos;t be picked.

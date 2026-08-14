@@ -37,13 +37,19 @@ class AttendanceAgent(BaseAgent):
     async def run(self, state):  # pragma: no cover
         return {"message": "Attendance Agent requires runtime invocation."}
 
-    def _extract_fields(self, command: str) -> dict[str, Any]:
+    def _extract_fields(self, command: str, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         from app.agents.attendance_agent.llm import llm_available, llm_extract_attendance
         import logging
         
         if llm_available():
             try:
-                return llm_extract_attendance(command)
+                extracted = llm_extract_attendance(command, history=history)
+                if not extracted.get("employee_name") and active_entity_id:
+                    from app.models.employee import Employee
+                    emp = self.db.get(Employee, active_entity_id)
+                    if emp:
+                        extracted["employee_name"] = emp.full_name
+                return extracted
             except Exception:
                 logging.getLogger(__name__).exception("LLM attendance extraction failed; using rule fallback")
         
@@ -52,6 +58,13 @@ class AttendanceAgent(BaseAgent):
         target_date = parse_attendance_date(command)
         query = employee_query(command)
         
+        
+        if not query and active_entity_id:
+            from app.models.employee import Employee
+            emp = self.db.get(Employee, active_entity_id)
+            if emp:
+                query = emp.full_name
+
         return {
             "employee_name": query,
             "target_date": target_date.isoformat(),
@@ -60,12 +73,12 @@ class AttendanceAgent(BaseAgent):
             "year": year
         }
 
-    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("AttendanceAgent requires a database session")
         action = self._classify(action, command)
         
-        extracted = self._extract_fields(command)
+        extracted = self._extract_fields(command, history=history, active_entity_id=active_entity_id)
         query = extracted.get("employee_name")
         month = extracted.get("month") or date.today().month
         year = extracted.get("year") or date.today().year

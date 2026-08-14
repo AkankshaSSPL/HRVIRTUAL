@@ -49,11 +49,11 @@ _NAME_TRAILING_FILLER = {"profile", "details", "record", "onboarding", "progress
 def _clean_employee_name(name: str) -> str:
     """Strip leading/trailing filler words from a captured employee name."""
     tokens = (name or "").strip().split()
-    while tokens and tokens[0].lower().strip(".,'’") in _NAME_LEADING_FILLER:
+    while tokens and tokens[0].lower().strip(".,'’?") in _NAME_LEADING_FILLER:
         tokens.pop(0)
-    while tokens and tokens[-1].lower().strip(".,'’") in _NAME_TRAILING_FILLER:
+    while tokens and tokens[-1].lower().strip(".,'’?") in _NAME_TRAILING_FILLER:
         tokens.pop()
-    return " ".join(tokens).strip()
+    return " ".join(tokens).strip(".,'’?")
 
 
 class EmployeeAgent(BaseAgent):
@@ -79,6 +79,7 @@ class EmployeeAgent(BaseAgent):
 
     def __init__(self, db: Session | None = None) -> None:
         self.db = db
+        self.llm_extraction: dict[str, Any] | None = None
 
     async def run(self, state):  # pragma: no cover - BaseAgent compatibility
         return {"message": "Employee Agent requires runtime invocation."}
@@ -88,18 +89,34 @@ class EmployeeAgent(BaseAgent):
             raise RuntimeError("EmployeeAgent requires a database session")
         return self.execute(action=action, command=payload.get("command", ""), user_id=context.user_id, workflow_id=context.workflow_id)
 
-    def execute(self, *, action: str, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id: UUID | None, workflow_id: str, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if action == "confirm_update":
             return self._handle_confirmation(command, user_id)
         if self._is_onboarding_progress_query(command):
-            return self._onboarding_progress_response(command)
-        parsed_action = self._classify_action(action, command)
+            return self._onboarding_progress_response(command, user_id)
+            
+        self.llm_extraction = None
+        try:
+            from app.agents.employee_agent.llm import llm_available, llm_extract_employee_command
+            if llm_available():
+                self.llm_extraction = llm_extract_employee_command(command)
+        except Exception as e:
+            logger.warning(f"LLM extraction failed: {e}")
+            
+        if self.llm_extraction and self.llm_extraction.get("action") and self.llm_extraction.get("action") != "unknown":
+            try:
+                parsed_action = EmployeeAgentAction(self.llm_extraction["action"])
+            except ValueError:
+                parsed_action = self._classify_action(action, command)
+        else:
+            parsed_action = self._classify_action(action, command)
+            
         page, page_size = self._pagination(command)
 
         if parsed_action in self.approval_required_actions:
-            return self._request_approval(parsed_action, command, user_id, workflow_id)
+            return self._request_approval(parsed_action, command, user_id, workflow_id, active_entity_id=active_entity_id)
         if parsed_action in self.confirmation_required_actions:
-            return self._request_confirmation(parsed_action, command)
+            return self._request_confirmation(parsed_action, command, active_entity_id=active_entity_id)
 
         if parsed_action == EmployeeAgentAction.SHOW_DEPARTMENT:
             department = self._department_from_command(command)
@@ -107,13 +124,13 @@ class EmployeeAgent(BaseAgent):
             return self._employee_table_response(command, employees, "Department employee search completed", page, page_size, total, {"department": department})
 
         if parsed_action == EmployeeAgentAction.SHOW_MANAGER:
-            employee = self._resolve_employee(command)
+            employee = self._resolve_employee(command, active_entity_id=active_entity_id)
             if employee and employee.reporting_manager:
                 return self._employee_card_response(command, employee.reporting_manager, "Reporting manager")
             return self._status_response("Reporting manager unavailable", "No reporting manager was found for this employee.")
 
         if parsed_action == EmployeeAgentAction.SHOW_PROFILE:
-            employee = self._resolve_employee(command)
+            employee = self._resolve_employee(command, active_entity_id=active_entity_id)
             if not employee:
                 query = self._employee_query(command) or command
                 return self._status_response(
@@ -133,8 +150,8 @@ class EmployeeAgent(BaseAgent):
         employees, total = list_employees(self.db, page=page, page_size=page_size, status=status)
         return self._employee_table_response(command, employees, "Employee directory loaded", page, page_size, total, {"status": status})
 
-    def _request_approval(self, action: EmployeeAgentAction, command: str, user_id: UUID | None, workflow_id: str) -> dict[str, Any]:
-        payload = self._approval_payload(action, command)
+    def _request_approval(self, action: EmployeeAgentAction, command: str, user_id: UUID | None, workflow_id: str, active_entity_id: UUID | None = None) -> dict[str, Any]:
+        payload = self._approval_payload(action, command, active_entity_id=active_entity_id)
         if action in self.approval_required_actions and action != EmployeeAgentAction.CREATE and not payload.get("employee_id"):
             return self._status_response("Employee not found", "I could not find the employee record to update. Please include the employee name as it appears in the employee list.")
         if action == EmployeeAgentAction.UPDATE_SALARY and payload.get("fields", {}).get("current_salary") is None:
@@ -184,8 +201,8 @@ class EmployeeAgent(BaseAgent):
             "completed_at": None,
         }
 
-    def _request_confirmation(self, action: EmployeeAgentAction, command: str) -> dict[str, Any]:
-        payload = self._approval_payload(action, command)
+    def _request_confirmation(self, action: EmployeeAgentAction, command: str, active_entity_id: UUID | None = None) -> dict[str, Any]:
+        payload = self._approval_payload(action, command, active_entity_id=active_entity_id)
         if not payload.get("employee_id"):
             return self._status_response("Employee not found", "I could not find the employee record to update. Please include the employee name as it appears in the employee list.")
         fields = payload.get("fields") or {}
@@ -345,8 +362,8 @@ class EmployeeAgent(BaseAgent):
             "structured_response": {"type": "status_banner", "title": title, "summary": summary, "payload": {}},
         }
 
-    def _approval_payload(self, action: EmployeeAgentAction, command: str) -> dict[str, Any]:
-        employee = self._resolve_employee(command)
+    def _approval_payload(self, action: EmployeeAgentAction, command: str, active_entity_id: UUID | None = None) -> dict[str, Any]:
+        employee = self._resolve_employee(command, active_entity_id=active_entity_id)
         payload: dict[str, Any] = {
             "command": command,
             "action": str(action),
@@ -422,9 +439,12 @@ class EmployeeAgent(BaseAgent):
             EmployeeAgentAction.DEACTIVATE: "Employee deactivation request",
         }.get(action, "Employee operation")
 
-    def _resolve_employee(self, command: str):
+    def _resolve_employee(self, command: str, active_entity_id: UUID | None = None):
         query = self._employee_query(command)
         logger.info(f"_resolve_employee: extracted query = {query!r}")
+        if not query and active_entity_id:
+            from app.models.employee import Employee
+            return self.db.get(Employee, active_entity_id)
         return find_one_employee(self.db, query) if query else None
 
     def _onboarding_employee_query(self, command: str) -> str:
@@ -436,7 +456,7 @@ class EmployeeAgent(BaseAgent):
         stripped = re.sub(r"\s+", " ", stripped).strip(" .")
         return stripped
 
-    def _onboarding_progress_response(self, command: str) -> dict[str, Any]:
+    def _onboarding_progress_response(self, command: str, user_id: UUID | None) -> dict[str, Any]:
         query = self._onboarding_employee_query(command)
         employee = find_one_employee(self.db, query) if query else None
         if not employee:
@@ -447,6 +467,15 @@ class EmployeeAgent(BaseAgent):
             )
         progress = compute_onboarding_progress(self.db, employee)
         summary = employee_to_summary(employee)
+        
+        audit_employee_action(
+            self.db,
+            action="employee.onboarding_status_checked",
+            payload={"employee_name": summary["name"]},
+            performed_by=user_id,
+            entity_id=employee.id,
+        )
+        self.db.commit()
         pending = progress["pending"]
         card_summary = (
             f"{progress['percent']}% complete — {len(pending)} step(s) remaining: {', '.join(pending)}."
@@ -484,6 +513,8 @@ class EmployeeAgent(BaseAgent):
         return "onboarding" in normalized and "progress" in normalized
 
     def _employee_query(self, command: str) -> str:
+        if self.llm_extraction and self.llm_extraction.get("target_employee_name"):
+            return self.llm_extraction["target_employee_name"]
         """
         Extract employee name from natural language commands.
         Supports:
@@ -539,22 +570,28 @@ class EmployeeAgent(BaseAgent):
         if relationship:
             return relationship[1]  # employee name
 
-        # 7. General fallback: if command has at least two words, take the last two as name (e.g., "show me Nikita Bhilare" → "Nikita Bhilare")
+        # 7. General fallback: if command has at least two words, take the last two as name
         parts = command.strip().split()
         if len(parts) >= 2:
             candidate = " ".join(parts[-2:])
             # Ensure it doesn't contain words like "salary", "manager", etc.
             if not any(word in candidate.lower() for word in ("salary", "manager", "department", "employee", "all", "list")):
-                return candidate
+                cleaned = _clean_employee_name(candidate)
+                if cleaned:
+                    return cleaned
 
         # 8. Last resort: if only one word, and it's not a stop word, treat as name
         if len(parts) == 1 and parts[0].lower() not in {"show", "find", "get", "view", "display"}:
-            return parts[0]
+            cleaned = _clean_employee_name(parts[0])
+            if cleaned:
+                return cleaned
 
         return ""
 
-    def _department_from_command(self, command: str) -> str:
-        match = re.search(r"(?:department|to|from)\s+([a-z][a-z\s]+)$", command, re.IGNORECASE)
+    def _department_from_command(self, command: str) -> str | None:
+        if self.llm_extraction and self.llm_extraction.get("department_name"):
+            return self.llm_extraction["department_name"]
+        match = re.search(r"(?:department|dept)\s+(?:to\s+)?([a-z][a-z\s]+?)(?:\s+department|\s+team|$)", command, re.IGNORECASE)
         if match and "salary" not in command.lower():
             return match.group(1).strip()
         for department in ("engineering", "finance", "people ops", "people", "hr", "sales", "marketing"):
@@ -562,7 +599,9 @@ class EmployeeAgent(BaseAgent):
                 return department
         return command
 
-    def _manager_from_command(self, command: str) -> str:
+    def _manager_from_command(self, command: str) -> str | None:
+        if self.llm_extraction and self.llm_extraction.get("manager_name"):
+            return self.llm_extraction["manager_name"]
         relationship = self._manager_relationship(command)
         if relationship:
             return relationship[0]
@@ -585,14 +624,16 @@ class EmployeeAgent(BaseAgent):
                 return match.group("manager").strip(" ."), match.group("employee").strip(" .")
         return None
 
-    def _salary_from_command(self, command: str) -> str:
+    def _salary_from_command(self, command: str) -> str | None:
+        if self.llm_extraction and self.llm_extraction.get("current_salary"):
+            return str(self.llm_extraction["current_salary"])
         amount = self._salary_number(command)
         return _salary_display(amount)
 
     def _salary_number(self, command: str) -> float | None:
         match = re.search(r"(?:salary|to)\s*(?:rs\.?|inr|₹)?\s*(\d[\d,]*)", command, re.IGNORECASE)
         if not match:
-            match = re.search(r"\b(?:add|set|update|change)?\s*(?:rs\.?|inr|â‚¹)?\s*(\d[\d,]*)\s*(?:per\s+month|monthly|month)?\s+(?:salary|pay|ctc)\b", command, re.IGNORECASE)
+            match = re.search(r"\b(?:add|set|update|change)?\s*(?:rs\.?|inr|₹,1)?\s*(\d[\d,]*)\s*(?:per\s+month|monthly|month)?\s+(?:salary|pay|ctc)\b", command, re.IGNORECASE)
         return float(Decimal(match.group(1).replace(",", ""))) if match else None
 
     def _pagination(self, command: str) -> tuple[int, int]:
@@ -609,6 +650,14 @@ class EmployeeAgent(BaseAgent):
 
     def _fields_from_command(self, command: str) -> dict[str, Any]:
         fields: dict[str, Any] = {}
+        if self.llm_extraction:
+            if self.llm_extraction.get("phone"):
+                fields["phone"] = self.llm_extraction["phone"]
+            if self.llm_extraction.get("official_email"):
+                fields["official_email"] = self.llm_extraction["official_email"]
+            if fields:
+                return fields
+                
         phone_match = re.search(r"phone\s+(?:to\s+)?([\d+\-\s]+)", command, re.IGNORECASE)
         if phone_match:
             fields["phone"] = phone_match.group(1).strip()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import calendar
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -26,15 +26,30 @@ _MONTH_NAMES.update({name.lower(): idx for idx, name in enumerate(calendar.month
 
 
 def parse_month_year_from_command(command: str, default: datetime | None = None) -> tuple[int, int]:
-    """Extract (month, year) from a free-text command like "generate payroll
-    for July 2026" or "download bank sheet for 7/2026". Falls back to the
-    current month/year if nothing is found — this is intentionally forgiving
-    since the UI always sends an explicit month via the Generate Payroll modal.
-    NOTE: this duplicates none of your existing tools.py parsing — it's kept
-    local here since I don't have that file's contents to safely extend it.
-    If you already have similar date-parsing helpers in tools.py, feel free
-    to delete this and import yours instead."""
+    """Extract (month, year) from a free-text command using LLM, with fallback to regex."""
     now = default or datetime.now(timezone.utc)
+    
+    from pydantic import BaseModel
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    class MonthYearExtraction(BaseModel):
+        month: int | None
+        year: int | None
+
+    try:
+        model = ChatOpenAI(model=settings.openai_intent_model, api_key=settings.openai_api_key, temperature=0)
+        structured_model = model.with_structured_output(MonthYearExtraction)
+        result = structured_model.invoke(f"Extract the month (1-12) and year (e.g., 2026) for the payroll run from the following command: {command}")
+        
+        if result and result.month:
+            return result.month, result.year or now.year
+    except Exception:
+        logger.exception("LLM extraction failed for parse_month_year_from_command, falling back to regex")
+
     normalized = command.lower()
 
     numeric_match = re.search(r"\b(\d{1,2})[/\-](\d{4})\b", normalized)
@@ -49,6 +64,7 @@ def parse_month_year_from_command(command: str, default: datetime | None = None)
             return idx, year
 
     return now.month, year
+from app.models.employee.models import LeaveRequest, LeaveRequestStatus
 from app.models.payroll import CompanySettings, PayrollRun, PayrollRunItem, PayrollRunStatus, SalaryComponent
 from app.services.payroll_computation import compute_payroll_run
 from app.services.payroll_export import (
@@ -85,7 +101,7 @@ class PayrollAgent(BaseAgent):
     async def run(self, state):  # pragma: no cover - BaseAgent compatibility
         return {"message": "Payroll Agent requires runtime invocation."}
 
-    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("PayrollAgent requires a database session")
 
@@ -170,13 +186,71 @@ class PayrollAgent(BaseAgent):
     # ── Payroll processing ────────────────────────────────────────────────
 
     def _process(self, command: str, user_id, workflow_id: str | None) -> dict[str, Any]:
+        normalized = command.strip().lower()
+        if normalized in {"yes", "confirm", "proceed", "yes, process payroll", "no", "cancel"}:
+            return self._handle_confirmation(command, user_id, workflow_id)
+
         month, year = parse_month_year_from_command(command)
+
+        start_date = date(year, month, 1)
+        end_date = date(year, month, calendar.monthrange(year, month)[1])
+
+        pending_leaves_count = self.db.query(LeaveRequest).filter(
+            LeaveRequest.status == LeaveRequestStatus.PENDING,
+            LeaveRequest.start_date <= end_date,
+            LeaveRequest.end_date >= start_date
+        ).count()
+
+        if pending_leaves_count > 0:
+            return self._status_response(
+                "Pending Leave Approvals",
+                f"There are {pending_leaves_count} pending leave request(s) overlapping {calendar.month_name[month]} {year}. Please approve or reject them before generating payroll.",
+                variant="error"
+            )
+
         existing = self.db.scalar(
             select(PayrollRun).where(PayrollRun.month == month, PayrollRun.year == year, PayrollRun.deleted_at.is_(None))
         )
         if existing and existing.status != PayrollRunStatus.DRAFT:
-            return self._payroll_summary_response(existing, [], workflow_id, already_existed=True)
+            return self._status_response("Payroll already processed", f"A non-draft payroll run already exists for {calendar.month_name[month]} {year}.")
 
+        return self._request_confirmation(command, month, year, user_id)
+
+    def _request_confirmation(self, command: str, month: int, year: int, user_id: UUID | None) -> dict[str, Any]:
+        return {
+            "agent": self.name,
+            "agent_display_name": "Payroll Agent",
+            "action": "process",
+            "message": f"Please confirm you want to process payroll for {calendar.month_name[month]} {year}.",
+            "operation_summary": f"Generate {calendar.month_name[month]} {year} Payroll",
+            "execution_status": "Needs Confirmation",
+            "workflow_status": "Needs Confirmation",
+            "structured_response": {
+                "type": "confirmation_card",
+                "title": f"Confirm Payroll Generation",
+                "summary": f"Are you sure you want to process payroll for {calendar.month_name[month]} {year}?",
+                "payload": {"action": "process_payroll", "month": month, "year": year},
+                "actions": ["Yes, process payroll", "Cancel"],
+            },
+        }
+
+    def _handle_confirmation(self, command: str, user_id: UUID | None, workflow_id: str | None) -> dict[str, Any]:
+        pending = self._latest_confirmation(user_id)
+        if not pending:
+            return self._status_response("Nothing to confirm", "I could not find a pending payroll generation request.")
+        
+        normalized = command.strip().lower()
+        if normalized in {"no", "cancel"}:
+            return self._status_response("Payroll generation cancelled", "The payroll generation was cancelled.")
+            
+        payload = pending.get("payload") or {}
+        if payload.get("action") != "process_payroll":
+            return self._status_response("Invalid confirmation", "The pending confirmation is not for payroll generation.")
+
+        month = payload.get("month")
+        year = payload.get("year")
+        
+        existing = self.db.scalar(select(PayrollRun).where(PayrollRun.month == month, PayrollRun.year == year, PayrollRun.deleted_at.is_(None)))
         line_items, skipped = compute_payroll_run(self.db, month, year)
 
         payroll_run = existing or PayrollRun(month=month, year=year, status=PayrollRunStatus.DRAFT)
@@ -196,12 +270,24 @@ class PayrollAgent(BaseAgent):
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
-            return self._status_response(
-                "Payroll generation failed",
-                "Could not save this payroll run — check for duplicate month/year runs.",
-            )
+            return self._status_response("Payroll generation failed", "Could not save this payroll run — check for duplicate month/year runs.")
         self.db.refresh(payroll_run)
         return self._payroll_summary_response(payroll_run, skipped, workflow_id)
+
+    def _latest_confirmation(self, user_id: UUID | None) -> dict[str, Any] | None:
+        if not user_id: return None
+        from app.models.agent_run import AgentRun
+        runs = self.db.scalars(
+            select(AgentRun)
+            .where(AgentRun.agent_name == "coordinator_agent", AgentRun.requested_by == user_id)
+            .order_by(AgentRun.created_at.desc())
+            .limit(10)
+        )
+        for run in runs:
+            response = ((run.metadata_json or {}).get("result") or {}).get("structured_response") or {}
+            if response.get("type") == "confirmation_card" and response.get("payload", {}).get("action") == "process_payroll":
+                return response
+        return None
 
     def _export(self, command: str, workflow_id: str | None) -> dict[str, Any]:
         month, year = parse_month_year_from_command(command)
@@ -341,7 +427,7 @@ class PayrollAgent(BaseAgent):
             word in normalized for word in ("sheet", "payroll", "bank", "tds")
         ):
             return "export"
-        if any(word in normalized for word in ("process", "generate", "run")) and "payroll" in normalized:
+        if any(word in normalized for word in ("process", "generate", "run", "show", "view", "get")) and "payroll" in normalized:
             return "process"
         # Pay-type classification — before component classification
         if any(word in normalized for word in ("pay type", "pay-type", "paytype")):
@@ -619,7 +705,7 @@ class PayrollAgent(BaseAgent):
             },
         }
 
-    def _status_response(self, title: str, summary: str) -> dict[str, Any]:
+    def _status_response(self, title: str, summary: str, variant: str | None = None) -> dict[str, Any]:
         return {
             "agent": self.name,
             "agent_display_name": "Payroll Agent",
@@ -630,7 +716,7 @@ class PayrollAgent(BaseAgent):
             "workflow_status": "Completed",
             "approval_request_id": None,
             "workflow_id": None,
-            "structured_response": {"type": "status_banner", "title": title, "summary": summary, "payload": {}},
+            "structured_response": {"type": "status_banner", "title": title, "summary": summary, "variant": variant, "payload": {}},
         }
 
     def _clarification_response(self, component_data: dict[str, Any], missing_fields: list[str]) -> dict[str, Any]:

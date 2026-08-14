@@ -36,7 +36,7 @@ class LeaveAgent(BaseAgent):
     async def run(self, state):  # pragma: no cover
         return {"message": "Leave Agent requires runtime invocation."}
 
-    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None) -> dict[str, Any]:
+    def execute(self, *, action: str, command: str, user_id=None, workflow_id: str | None = None, history: list[dict] | None = None, active_entity_id: UUID | None = None) -> dict[str, Any]:
         if self.db is None:
             raise RuntimeError("LeaveAgent requires a database session")
         action = self._classify(action, command)
@@ -86,7 +86,14 @@ class LeaveAgent(BaseAgent):
             )
             return self._approval_response(requests, approval_id, workflow_id)
 
-        employee = find_employee_or_raise(self.db, employee_query(command))
+        query_str = employee_query(command)
+        if not query_str and active_entity_id:
+            query_str = str(active_entity_id)
+            
+        try:
+            employee = find_employee_or_raise(self.db, query_str)
+        except LookupError as exc:
+            return self._status_response("Could not determine employee", str(exc), workflow_id)
         if action == "balance":
             return self._balance_response(leave_balances(self.db, employee=employee), workflow_id)
         if action == "history":
