@@ -37,13 +37,11 @@ def document_payload(document: EmployeeDocument) -> dict:
 
 
 @router.get("", dependencies=[Depends(require_permissions("documents:view"))])
-def list_documents(db: Session = Depends(get_db)):
-    documents = db.scalars(
-        select(EmployeeDocument)
-        .options(selectinload(EmployeeDocument.employee))
-        .where(EmployeeDocument.deleted_at.is_(None))
-        .order_by(EmployeeDocument.created_at.desc())
-    ).all()
+def list_documents(employee_id: UUID | None = None, db: Session = Depends(get_db)):
+    query = select(EmployeeDocument).options(selectinload(EmployeeDocument.employee)).where(EmployeeDocument.deleted_at.is_(None))
+    if employee_id:
+        query = query.where(EmployeeDocument.employee_id == employee_id)
+    documents = db.scalars(query.order_by(EmployeeDocument.created_at.desc())).all()
     return [document_payload(document) for document in documents]
 
 

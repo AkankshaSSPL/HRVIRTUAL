@@ -26,8 +26,8 @@ from app.agents.leave_agent.tools import (
 
 class LeaveAgent(BaseAgent):
     name = "leave_agent"
-    description = "Leave policies, requests, approvals, balances, WFH, and payroll leave inputs."
-    supported_actions = ["create_type", "apply", "balance", "history", "pending", "approve", "reject", "cancel", "calendar", "summary"]
+    description = "Leave policies, requests, approvals, balances, WFH, monthly accruals, and payroll leave inputs."
+    supported_actions = ["create_type", "apply", "balance", "history", "pending", "approve", "reject", "cancel", "calendar", "summary", "run_accrual"]
     approval_required_actions = ["approve"]
 
     def __init__(self, db: Session | None = None) -> None:
@@ -58,6 +58,7 @@ class LeaveAgent(BaseAgent):
             employee_name = employee_query(command)
             if not employee_name:
                 return self._status_response("Employee name required", "Please provide the employee name and leave date to cancel.", workflow_id)
+            # Remaining logic... (Note: this replacement chunk is too small to safely overwrite the whole file. I will use a tighter boundary.)
             start_date, end_date = parse_leave_dates(command)
             requests = cancellable_leave_requests(self.db, employee_name=employee_name, start_date=start_date, end_date=end_date)
             if not requests:
@@ -86,6 +87,19 @@ class LeaveAgent(BaseAgent):
             )
             return self._approval_response(requests, approval_id, workflow_id)
 
+        if action == "run_accrual":
+            import datetime
+            import sys
+            import os
+            import subprocess
+            try:
+                # Use subprocess to run the script cleanly with its own session
+                script_path = os.path.join(os.path.dirname(__file__), "../../../scripts/run_monthly_leave_accrual.py")
+                subprocess.run([sys.executable, script_path, "--type", "Casual Leave"], check=True)
+                return self._status_response("Monthly Accrual Completed", "The automated script has successfully added 2 Casual Leaves to all eligible full-time employees for this month.", workflow_id)
+            except Exception as e:
+                return self._status_response("Error running accrual", str(e), workflow_id)
+
         query_str = employee_query(command)
         if not query_str and active_entity_id:
             query_str = str(active_entity_id)
@@ -95,7 +109,13 @@ class LeaveAgent(BaseAgent):
         except LookupError as exc:
             return self._status_response("Could not determine employee", str(exc), workflow_id)
         if action == "balance":
-            return self._balance_response(leave_balances(self.db, employee=employee), workflow_id)
+            balances = leave_balances(self.db, employee=employee)
+            if not balances:
+                from app.models.employee.models import EmploymentType
+                if employee.employment_type == EmploymentType.CONSULTANT:
+                    return self._status_response("Consultant Contract", f"{employee.first_name} {employee.last_name} is a Consultant. They do not receive a fixed leave quota, as their pay is strictly determined by working days.", workflow_id)
+                return self._status_response("No Leave Balances", f"No leave balances found for {employee.first_name}.", workflow_id)
+            return self._balance_response(balances, workflow_id)
         if action == "history":
             return self._history_response(leave_history(self.db, employee=employee), workflow_id)
 

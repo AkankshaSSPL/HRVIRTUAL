@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowRight, BadgeDollarSign, Ban, BriefcaseBusiness, Bui
 import { Button } from "@/components/ui/button";
 import { DrawerPanel } from "@/components/ui-system/DrawerPanel";
 import { StatusBadge } from "@/components/ui-system/StatusBadge";
+import { DocumentPreviewModal } from "@/components/ui-system/DocumentPreviewModal";
 import { agentThemeFor, statusToneFor } from "@/lib/agent-theme";
 import { cn } from "@/lib/utils";
 import { createSalaryAssignment, getEmployeePayrollImpact, getEmployeeSalary, getSalaryStructures } from "@/services/salaryAssignments";
@@ -14,6 +15,7 @@ import { getEmployeeAttendanceSummary } from "@/services/attendance";
 import { getEmployeeLeaveBalances, getEmployeeLeaveHistory } from "@/services/leave";
 import { getDocuments } from "@/services/documents";
 import { getAssets, createAsset, updateAssetStatus, getAssetTypes, type AssetRecord } from "@/services/assets";
+import { BACKEND_URL } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 
 import { useRef } from "react";
@@ -798,6 +800,7 @@ export function EmployeeProfileDrawer({
     enabled: Boolean(open && employee?.id && tab === "Assets"),
   });
   
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [assigningAsset, setAssigningAsset] = useState(false);
   const [assetForm, setAssetForm] = useState({ asset_type: "", asset_name: "", validity_date: "" });
   const assetTypesQuery = useQuery({ queryKey: ["asset-types"], queryFn: getAssetTypes, enabled: Boolean(open && tab === "Assets" && assigningAsset) });
@@ -1111,7 +1114,13 @@ export function EmployeeProfileDrawer({
           ) : null}
           {tab === "Assets" ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Allocated Seat</p>
+                  <p className="text-sm text-muted-foreground">
+                    {employee?.seat_label ? `Seat ${employee.seat_label}` : "No seat assigned"}
+                  </p>
+                </div>
                 <Button size="sm" variant={assigningAsset ? "outline" : "default"} onClick={() => setAssigningAsset((v) => !v)}>
                   {assigningAsset ? "Cancel" : "+ Add Asset"}
                 </Button>
@@ -1252,7 +1261,7 @@ export function EmployeeProfileDrawer({
                         </div>
                         <div className="flex items-center gap-2">
                           <StatusBadge status={document.status} tone={document.status === "VERIFIED" ? "success" : document.status === "REJECTED" ? "danger" : "warning"} />
-                          <Button variant="ghost" size="icon" aria-label="Open document" onClick={() => window.open(document.document_url, "_blank", "noopener,noreferrer")}>
+                          <Button variant="ghost" size="icon" aria-label="Open document" onClick={() => setPreviewUrl(`${BACKEND_URL}${document.document_url.startsWith("/") ? "" : "/"}${document.document_url}`)}>
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1267,6 +1276,7 @@ export function EmployeeProfileDrawer({
           ) : null}
         </div>
       ) : <p className="text-sm text-muted-foreground">No employee selected.</p>}
+      <DocumentPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
     </DrawerPanel>
   );
 }

@@ -1,36 +1,58 @@
 import type { LucideIcon } from "lucide-react";
-
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type StatCardProps = {
   label: string;
-  value: string;
+  value: string | React.ReactNode;
   icon: LucideIcon;
   detail?: string;
-  tone?: "primary" | "success" | "warning" | "neutral";
+  tone?: "emerald" | "blue" | "purple" | "amber" | "orange";
 };
 
-const tones = {
-  primary: "bg-primary/10 text-primary",
-  success: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
-  warning: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  neutral: "bg-muted text-muted-foreground",
+const palettes = {
+  emerald: {
+    iconBg: "bg-emerald-50",
+    iconText: "text-emerald-700",
+  },
+  blue: {
+    iconBg: "bg-blue-50",
+    iconText: "text-blue-700",
+  },
+  purple: {
+    iconBg: "bg-purple-50",
+    iconText: "text-purple-700",
+  },
+  amber: {
+    iconBg: "bg-amber-50",
+    iconText: "text-amber-700",
+  },
+  orange: {
+    iconBg: "bg-orange-50",
+    iconText: "text-orange-700",
+  },
 };
 
-export function StatCard({ label, value, icon: Icon, detail, tone = "primary" }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, detail, tone = "blue" }: StatCardProps) {
+  const palette = palettes[tone];
+
   return (
-    <div className="rounded-lg border bg-card p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="mt-2 text-3xl font-semibold tracking-normal">{value}</p>
+    <div className={cn("relative flex flex-col justify-between rounded-xl border bg-card p-6 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md")}>
+      <div className="flex items-start justify-between">
+        <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", palette.iconBg, palette.iconText)}>
+          <Icon className="h-6 w-6" />
         </div>
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-md", tones[tone])}>
-          <Icon className="h-5 w-5" />
-        </div>
+        <ArrowUpRight className={cn("h-5 w-5 text-muted-foreground")} />
       </div>
-      {detail ? <p className="mt-3 text-xs text-muted-foreground">{detail}</p> : null}
+      <div className="mt-8">
+        <p className={cn("text-sm font-medium text-muted-foreground")}>{label}</p>
+        <p className={cn("mt-1 text-3xl font-bold tracking-tight text-foreground")}>{value}</p>
+        {detail ? (
+          <div className={cn("mt-4 flex items-center gap-1.5 text-xs font-medium text-muted-foreground")}>
+            {detail}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
-

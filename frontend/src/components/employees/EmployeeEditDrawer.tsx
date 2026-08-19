@@ -9,6 +9,7 @@ import { getLookups } from "@/services/lookups";
 import { getEmployeeTDSConfigs, getPayTypes, previewSalaryBreakdown } from "@/services/payroll";
 import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
+import { validateEmployeeForm } from "@/utils/validators";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
 
@@ -109,7 +110,8 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
     current_salary: currentSalary === "" ? null : Number(currentSalary),
   } as Partial<EmployeeCreatePayload>;
 
-  const isFormValid = Boolean(form.first_name?.trim() && form.official_email?.trim());
+  const errors = validateEmployeeForm(form, true);
+  const isFormValid = Object.keys(errors).length === 0;
 
   return (
     <DrawerPanel open={open} title="Update Employee" size="2xl" onClose={onClose}>
@@ -126,35 +128,35 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
           <TabBar tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
           <div className={activeTab === "personal" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="First name" required success={Boolean(form.first_name?.trim())}><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
-            <Field label="Last name" required success={Boolean(form.last_name?.trim())}><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
-            <Field label="Official email" required success={Boolean(form.official_email?.trim())}><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
-            <Field label="Personal email" required success={Boolean(form.personal_email?.trim())}><Input type="email" value={form.personal_email ?? ""} onChange={(event) => setValue("personal_email", event.target.value)} /></Field>
-            <Field label="Phone" required success={Boolean(form.phone?.trim())}><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
-            <Field label="Date of birth" required success={Boolean(form.dob?.trim())}><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
-            <Field label="Gender" required success={Boolean(form.gender?.trim())}><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
-            <Field label="Address" required success={Boolean(form.address?.trim())}><Input value={form.address ?? ""} onChange={(event) => setValue("address", event.target.value)} /></Field>
-            <Field label="City" required success={Boolean(form.city?.trim())}><Input value={form.city ?? ""} onChange={(event) => setValue("city", event.target.value)} /></Field>
-            <Field label="Zip code" required success={Boolean(form.zip_code?.trim())}><Input value={form.zip_code ?? ""} onChange={(event) => setValue("zip_code", event.target.value)} /></Field>
+            <Field label="First name" required error={errors.first_name} success={!errors.first_name && Boolean(form.first_name?.trim())}><Input value={form.first_name ?? ""} onChange={(event) => setValue("first_name", event.target.value)} /></Field>
+            <Field label="Last name" required error={errors.last_name} success={!errors.last_name && Boolean(form.last_name?.trim())}><Input value={form.last_name ?? ""} onChange={(event) => setValue("last_name", event.target.value)} /></Field>
+            <Field label="Official email" required error={errors.official_email} success={!errors.official_email && Boolean(form.official_email?.trim())}><Input type="email" value={form.official_email ?? ""} onChange={(event) => setValue("official_email", event.target.value)} /></Field>
+            <Field label="Personal email" required error={errors.personal_email} success={!errors.personal_email && Boolean(form.personal_email?.trim())}><Input type="email" value={form.personal_email ?? ""} onChange={(event) => setValue("personal_email", event.target.value)} /></Field>
+            <Field label="Phone" required error={errors.phone} success={!errors.phone && Boolean(form.phone?.trim())}><Input value={form.phone ?? ""} onChange={(event) => setValue("phone", event.target.value)} /></Field>
+            <Field label="Date of birth" required error={errors.dob} success={!errors.dob && Boolean(form.dob?.trim())}><Input type="date" value={form.dob ?? ""} onChange={(event) => setValue("dob", event.target.value)} /></Field>
+            <Field label="Gender" required error={errors.gender} success={!errors.gender && Boolean(form.gender?.trim())}><Select value={form.gender} onChange={(value) => setValue("gender", value)} options={[["", "Not specified"], ...(lookupsQuery.data?.gender ?? []).map((item) => [item.code, item.label])]} /></Field>
+            <Field label="Address" required error={errors.address} success={!errors.address && Boolean(form.address?.trim())}><Input value={form.address ?? ""} onChange={(event) => setValue("address", event.target.value)} /></Field>
+            <Field label="City" required error={errors.city} success={!errors.city && Boolean(form.city?.trim())}><Input value={form.city ?? ""} onChange={(event) => setValue("city", event.target.value)} /></Field>
+            <Field label="Zip code" required error={errors.zip_code} success={!errors.zip_code && Boolean(form.zip_code?.trim())}><Input value={form.zip_code ?? ""} onChange={(event) => setValue("zip_code", event.target.value)} /></Field>
           </div>
 
           <div className={activeTab === "employment" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="Employee code"><Input value={form.employee_code ?? ""} onChange={(event) => setValue("employee_code", event.target.value)} /></Field>
-            <Field label="Joining date" required success={Boolean(form.joining_date?.trim())}><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
-            <Field label="Employment type"><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...employmentTypeOptions]} /></Field>
-            <Field label="Status"><Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} /></Field>
-            <Field label="Department"><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
-            <Field label="Designation" required success={Boolean(form.designation_id?.trim())}><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
-            <Field label="Reporting manager"><Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).filter((item) => item.id !== employeeId).map((item) => [item.id, item.name])]} /></Field>
+            <Field label="Employee code" error={errors.employee_code}><Input value={form.employee_code ?? ""} onChange={(event) => setValue("employee_code", event.target.value)} /></Field>
+            <Field label="Joining date" required error={errors.joining_date} success={!errors.joining_date && Boolean(form.joining_date?.trim())}><Input type="date" value={form.joining_date ?? ""} onChange={(event) => setValue("joining_date", event.target.value)} /></Field>
+            <Field label="Employment type" error={errors.employment_type}><Select value={form.employment_type} onChange={(value) => setValue("employment_type", value)} options={[["", "Select employment type"], ...employmentTypeOptions]} /></Field>
+            <Field label="Status" error={errors.employment_status}><Select value={form.employment_status} onChange={(value) => setValue("employment_status", value)} options={[["", "Select status"], ...(lookupsQuery.data?.employment_status ?? []).map((item) => [item.code, item.label])]} /></Field>
+            <Field label="Department" error={errors.department_id}><Select value={form.department_id} onChange={(value) => setValue("department_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.departments ?? []).map((item) => [item.id, item.name])]} /></Field>
+            <Field label="Designation" required error={errors.designation_id} success={!errors.designation_id && Boolean(form.designation_id?.trim())}><Select value={form.designation_id} onChange={(value) => setValue("designation_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.designations ?? []).map((item) => [item.id, item.name])]} /></Field>
+            <Field label="Reporting manager" error={errors.reporting_manager_id}><Select value={form.reporting_manager_id} onChange={(value) => setValue("reporting_manager_id", value)} options={[["", "Unassigned"], ...(optionsQuery.data?.managers ?? []).filter((item) => item.id !== employeeId).map((item) => [item.id, item.name])]} /></Field>
           </div>
 
           <div className={activeTab === "bank" ? "grid gap-3 sm:grid-cols-2" : "hidden"}>
-            <Field label="Bank account number" required success={Boolean(form.bank_account_number?.trim())}><Input value={form.bank_account_number ?? ""} onChange={(event) => setValue("bank_account_number", event.target.value)} /></Field>
-            <Field label="IFSC code" required success={Boolean(form.ifsc_code?.trim())}><Input value={form.ifsc_code ?? ""} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} /></Field>
-            <Field label="Bank branch" required success={Boolean(form.bank_branch?.trim())}><Input value={form.bank_branch ?? ""} onChange={(event) => setValue("bank_branch", event.target.value)} /></Field>
-            <Field label="PAN number" required success={Boolean(form.pan_number?.trim())}><Input value={form.pan_number ?? ""} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} /></Field>
-            <Field label="Aadhaar number" required success={Boolean(form.aadhaar_number?.trim())}><Input value={form.aadhaar_number ?? ""} onChange={(event) => setValue("aadhaar_number", event.target.value)} /></Field>
-            <Field label="UAN number"><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
+            <Field label="Bank account number" required error={errors.bank_account_number} success={!errors.bank_account_number && Boolean(form.bank_account_number?.trim())}><Input value={form.bank_account_number ?? ""} onChange={(event) => setValue("bank_account_number", event.target.value)} /></Field>
+            <Field label="IFSC code" required error={errors.ifsc_code} success={!errors.ifsc_code && Boolean(form.ifsc_code?.trim())}><Input value={form.ifsc_code ?? ""} onChange={(event) => setValue("ifsc_code", event.target.value.toUpperCase())} /></Field>
+            <Field label="Bank branch" required error={errors.bank_branch} success={!errors.bank_branch && Boolean(form.bank_branch?.trim())}><Input value={form.bank_branch ?? ""} onChange={(event) => setValue("bank_branch", event.target.value)} /></Field>
+            <Field label="PAN number" required error={errors.pan_number} success={!errors.pan_number && Boolean(form.pan_number?.trim())}><Input value={form.pan_number ?? ""} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} /></Field>
+            <Field label="Aadhaar number" required error={errors.aadhaar_number} success={!errors.aadhaar_number && Boolean(form.aadhaar_number?.trim())}><Input value={form.aadhaar_number ?? ""} onChange={(event) => setValue("aadhaar_number", event.target.value)} /></Field>
+            <Field label="UAN number" error={errors.uan_number} success={!errors.uan_number && Boolean(form.uan_number?.trim())}><Input value={form.uan_number ?? ""} onChange={(event) => setValue("uan_number", event.target.value)} /></Field>
           </div>
 
           <div className={activeTab === "payroll" ? "space-y-5" : "hidden"}>

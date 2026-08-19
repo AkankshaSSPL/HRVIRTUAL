@@ -37,10 +37,12 @@ export function LeavePage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [applyingLeave, setApplyingLeave] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [leaveForm, setLeaveForm] = useState({ employee_id: "", leave_type: "Casual Leave", start_date: "", end_date: "", reason: "" });
   const workspaceQuery = useQuery({
-    queryKey: ["leave-workspace"],
-    queryFn: getLeaveWorkspace,
+    queryKey: ["leave-workspace", selectedYear],
+    queryFn: () => getLeaveWorkspace(selectedYear),
     refetchInterval: 15000,
   });
   const workspace = workspaceQuery.data;
@@ -57,12 +59,11 @@ export function LeavePage() {
   });
 
   const filteredEmployees = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
-    if (!normalized) return workspace?.employees ?? [];
-    return (workspace?.employees ?? []).filter(({ employee }) =>
-      [employee.name, employee.department, employee.designation].some((value) => value?.toLowerCase().includes(normalized)),
-    );
+    if (!workspace?.employees) return [];
+    return workspace.employees.filter((e) => !search || e.employee.name?.toLowerCase().includes(search.toLowerCase()) || e.employee.department?.toLowerCase().includes(search.toLowerCase()));
   }, [search, workspace?.employees]);
+
+  const selectedEmployee = useMemo(() => workspace?.employees.find((e) => e.employee.id === selectedEmployeeId), [workspace, selectedEmployeeId]);
 
   const approvedUpcoming = (workspace?.calendar ?? []).filter((request) => request.status === "APPROVED");
   const employeesOnLeave = new Set(approvedUpcoming.map((request) => request.employee_id)).size;
@@ -126,11 +127,22 @@ export function LeavePage() {
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
               <SectionCard
                 title="Employee Leave Balances"
-                description="Current paid leave entitlement across active employee records."
+                description={`Current paid leave entitlement across active employee records.`}
                 action={
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Search employees" />
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <div className="relative w-full sm:w-64">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Search employees" />
+                    </div>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="h-10 rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value={new Date().getFullYear() - 1}>{new Date().getFullYear() - 1}</option>
+                      <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+                      <option value={new Date().getFullYear() + 1}>{new Date().getFullYear() + 1}</option>
+                    </select>
                   </div>
                 }
               >
@@ -145,7 +157,7 @@ export function LeavePage() {
                     <button
                       type="button"
                       key={employee.id}
-                      onClick={() => openCommand(`Show ${employee.name ?? "employee"} leave balance`)}
+                      onClick={() => setSelectedEmployeeId(employee.id)}
                       className="grid w-full grid-cols-[minmax(180px,1fr)_80px_80px_80px] gap-3 border-t px-4 py-3 text-left transition hover:bg-muted/50"
                     >
                       <span className="min-w-0">
@@ -242,6 +254,46 @@ export function LeavePage() {
               </Button>
             </div>
           </div>
+        </DrawerPanel>
+        <DrawerPanel open={!!selectedEmployeeId} title="Employee Leave Balance" size="xl" onClose={() => setSelectedEmployeeId(null)}>
+          {selectedEmployee ? (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border bg-muted">
+                  <Users className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">{selectedEmployee.employee.name ?? "Unnamed employee"}</h2>
+                  <p className="text-sm text-muted-foreground">{selectedEmployee.employee.department ?? "Unassigned"}</p>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-lg border">
+                <div className="grid grid-cols-[1fr_80px_80px_80px] gap-3 bg-muted px-4 py-3 text-xs font-medium uppercase text-muted-foreground">
+                  <span>Leave Type</span>
+                  <span className="text-right">Total</span>
+                  <span className="text-right">Used</span>
+                  <span className="text-right">Available</span>
+                </div>
+                <div className="divide-y">
+                  {selectedEmployee.balances.map((balance) => (
+                    <div key={balance.leave_type_id ?? balance.leave_type} className="grid grid-cols-[1fr_80px_80px_80px] gap-3 px-4 py-3">
+                      <span className="text-sm font-medium">{balance.leave_type}</span>
+                      <span className="text-right text-sm text-blue-600">{balance.allocated}</span>
+                      <span className="text-right text-sm text-rose-600">{balance.used}</span>
+                      <span className="text-right text-sm font-semibold text-emerald-600">{balance.remaining}</span>
+                    </div>
+                  ))}
+                  {!selectedEmployee.balances.length && (
+                    <p className="p-4 text-center text-sm text-muted-foreground">
+                      {selectedEmployee.employee.employment_type === "CONSULTANT" 
+                        ? "Consultants are not eligible for assigned leave balances." 
+                        : "No leave balances assigned."}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </DrawerPanel>
       </PageContainer>
     </AppLayout>

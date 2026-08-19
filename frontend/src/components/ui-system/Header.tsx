@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui-system/Breadcrumbs";
 import { SearchBar } from "@/components/ui-system/SearchBar";
+import { NotificationsDropdown } from "@/components/ui-system/NotificationsDropdown";
 import { useAppStore } from "@/stores/appStore";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -30,9 +31,7 @@ export function Header() {
       <Button variant="ghost" size="icon" aria-label="Global search" className="xl:hidden">
         <Search className="h-5 w-5" />
       </Button>
-      <Button variant="ghost" size="icon" aria-label="Notifications">
-        <Bell className="h-5 w-5" />
-      </Button>
+      <NotificationsDropdown />
       <Button variant="outline" className="hidden gap-2 sm:inline-flex" onClick={handleLogout}>
         <UserCircle className="h-4 w-4" />
         {user?.full_name ?? "Profile"}

@@ -77,13 +77,45 @@ export function DashboardPage() {
           title="Dashboard"
           description="Overview of your company stats, attendance, and recent activity."
         />
-        <WelcomeBanner totalPresent={employeesQuery.data?.total ?? 45} />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Total Employees" value={statsQuery.data?.total_employees ?? "..."} icon={Users} detail="Connects to employee data" />
-          <StatCard label="Pending Approvals" value={statsQuery.data?.pending_approvals ?? "..."} icon={Clock3} detail="Connects to approval queue" tone="warning" />
-          <StatCard label="Active Agents" value={statsQuery.data?.active_agents ?? "..."} icon={Bot} detail="Orchestration available" tone="success" />
-          <StatCard label="Payroll Pending" value={statsQuery.data?.payroll_pending ?? "..."} icon={Landmark} detail="Payroll agent not enabled" tone="warning" />
-          <StatCard label="Employees On Leave" value={statsQuery.data?.employees_on_leave ?? "..."} icon={CalendarClock} detail="Leave agent foundation ready" tone="neutral" />
+        <WelcomeBanner 
+          totalPresent={statsQuery.data ? statsQuery.data.total_employees - (statsQuery.data.employees_on_leave ?? 0) : (employeesQuery.data?.total ?? 0)} 
+        />
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <StatCard 
+            label="Total Employees" 
+            value={statsQuery.data?.total_employees ?? "..."} 
+            icon={Users} 
+            detail="Connects to employee data" 
+            tone="blue" 
+          />
+          <StatCard 
+            label="Attendance Rate" 
+            value={statsQuery.data?.total_employees ? Math.round(((statsQuery.data.total_employees - (statsQuery.data.employees_on_leave ?? 0)) / statsQuery.data.total_employees) * 100) + "%" : "..."} 
+            icon={CalendarClock} 
+            detail={`${statsQuery.data?.employees_on_leave ?? 0} on leave today`} 
+            tone="purple" 
+          />
+          <StatCard 
+            label="Pending Approvals" 
+            value={statsQuery.data?.pending_approvals ?? "..."} 
+            icon={Clock3} 
+            detail="Connects to approval queue" 
+            tone="amber" 
+          />
+          <StatCard 
+            label="Payroll Pending" 
+            value={statsQuery.data?.payroll_pending ?? "..."} 
+            icon={Landmark} 
+            detail="Payroll agent not enabled" 
+            tone="emerald" 
+          />
+          <StatCard 
+            label="Employees On Leave" 
+            value={statsQuery.data?.employees_on_leave ?? "..."} 
+            icon={CalendarClock} 
+            detail="Leave agent foundation ready" 
+            tone="orange" 
+          />
         </div>
         <SectionCard title="Onboarding Progress" description="Employees still working through the 7-step onboarding checklist.">
           {!employeesQuery.isLoading && !inProgress.length ? (

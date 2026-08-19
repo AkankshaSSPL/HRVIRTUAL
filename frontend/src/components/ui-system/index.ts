@@ -65,3 +65,4 @@ export { StatusBadge } from "./StatusBadge";
 export { ThemeProvider, useTheme } from "./theme-provider";
 export { Timeline } from "./Timeline";
 export { ToastNotification } from "./ToastNotification";
+export * from "./DocumentPreviewModal";

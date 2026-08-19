@@ -50,8 +50,9 @@ export type LeavePolicy = {
   affects_payroll: boolean;
 };
 
-export function getEmployeeLeaveBalances(employeeId: string) {
-  return apiGet<LeaveBalance[]>(`/leave/employees/${employeeId}/balances`);
+export function getEmployeeLeaveBalances(employeeId: string, year?: number) {
+  const query = year ? `?year=${year}` : "";
+  return apiGet<LeaveBalance[]>(`/leave/employees/${employeeId}/balances${query}`);
 }
 
 export function getEmployeeLeaveHistory(employeeId: string) {
@@ -74,13 +75,13 @@ export function applyLeave(payload: { employee_id: string; leave_type: string; s
   return apiPost<LeaveRequest>("/leave/requests", payload);
 }
 
-export async function getLeaveWorkspace(): Promise<LeaveWorkspace> {
+export async function getLeaveWorkspace(year?: number): Promise<LeaveWorkspace> {
   const [employeeResponse, pending, calendar] = await Promise.all([
     getEmployees(),
     getPendingLeaveRequests(),
     getLeaveCalendar(),
   ]);
-  const balanceSets = await Promise.all(employeeResponse.items.map((employee) => getEmployeeLeaveBalances(employee.id)));
+  const balanceSets = await Promise.all(employeeResponse.items.map((employee) => getEmployeeLeaveBalances(employee.id, year)));
   const employees = employeeResponse.items.map((employee, index) => {
     const balances = balanceSets[index] ?? [];
     const paidBalances = balances.filter((balance) => ["Paid Leave", "Casual Leave"].includes(balance.leave_type));

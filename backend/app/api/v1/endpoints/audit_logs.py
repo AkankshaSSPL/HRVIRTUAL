@@ -98,6 +98,28 @@ def format_audit_log(log: AuditLog, user_map: dict[UUID, str], emp_map: dict[UUI
     elif action == "approval.rejected":
         title = "Request Rejected"
         message = f"{performed_by_name} rejected the request."
+        
+    # Leave events
+    elif action == "leave.applied":
+        title = "Leave Requested"
+        message = f"{entity_name} requested leave."
+    elif action == "leave.approved":
+        title = "Leave Approved"
+        message = f"Leave approved for {entity_name}."
+    elif action == "leave.rejected":
+        title = "Leave Rejected"
+        message = f"Leave rejected for {entity_name}."
+    elif action == "leave.cancelled":
+        title = "Leave Cancelled"
+        message = f"Leave cancelled for {entity_name}."
+        
+    # Payroll events
+    elif action == "salary_assignment.requested":
+        title = "Salary Update Requested"
+        message = f"Salary update requested for {entity_name}."
+    elif action == "salary_assignment.activated" or action == "employee.salary_update.executed":
+        title = "Salary Updated"
+        message = f"Salary details updated for {entity_name}."
     
     # Very minor title fixes for attendance
     if "attendance" in action:
@@ -125,22 +147,36 @@ def get_audit_logs(
     current_user: User = Depends(get_current_user),
 ):
     ALLOWED_ACTIONS = [
+        # Employee / Onboarding / Assets
         "employee.created_from_onboarding",
         "employee.deactivated_from_form",
         "employee.seat_assigned",
         "employee.onboarding_assets_assigned",
         "employee.welcome_kit_sent",
-        "employee.updated_from_form",
-        "employee.onboarding_status_checked",
-        "attendance.recorded",
+        
+        # Attendance (manual overrides only to prevent daily spam)
         "attendance.corrected",
+        "attendance.regularized",
+        
+        # Leave
+        "leave.applied",
+        "leave.approved",
+        "leave.rejected",
+        "leave.cancelled",
+        
+        # Approvals
+        "approval.created",
+        "approval.approved",
+        "approval.rejected",
+        
+        # Payroll / Salary
+        "salary_assignment.requested",
+        "salary_assignment.activated",
+        "employee.salary_update.executed"
     ]
     
     query = db.query(AuditLog).filter(
-        or_(
-            AuditLog.action.in_(ALLOWED_ACTIONS),
-            AuditLog.action.like("attendance.%")
-        )
+        AuditLog.action.in_(ALLOWED_ACTIONS)
     )
     
     total = query.count()

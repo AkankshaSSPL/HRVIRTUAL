@@ -1,6 +1,7 @@
 import { useAuthStore } from "@/stores/authStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8001/api/v1";
+export const BACKEND_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
 
 export class ApiError extends Error {
   status: number;
@@ -88,8 +89,18 @@ async function apiRequest<T>(path: string, init: RequestInit): Promise<T> {
     }
   }
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new ApiError(payload?.detail ? (typeof payload.detail === 'string' ? payload.detail : JSON.stringify(payload.detail)) : `API request failed: ${response.status}`, response.status);
+    const payload = await response.json().catch(() => null) as { detail?: any } | null;
+    let errorMessage = `API request failed: ${response.status}`;
+    if (payload?.detail) {
+      if (typeof payload.detail === 'string') {
+        errorMessage = payload.detail;
+      } else if (Array.isArray(payload.detail) && payload.detail.length > 0 && payload.detail[0].msg) {
+        errorMessage = payload.detail.map((e: any) => e.msg.replace('Value error, ', '')).join('; ');
+      } else {
+        errorMessage = JSON.stringify(payload.detail);
+      }
+    }
+    throw new ApiError(errorMessage, response.status);
   }
   return response.json() as Promise<T>;
 }

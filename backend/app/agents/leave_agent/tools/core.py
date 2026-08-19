@@ -564,6 +564,9 @@ def ensure_default_leave_types(db: Session) -> None:
 
 
 def ensure_default_balances(db: Session, *, employee: Employee, year: int) -> None:
+    from app.models.employee.models import EmploymentType
+    if employee.employment_type == EmploymentType.CONSULTANT:
+        return
     ensure_default_leave_types(db)
     types = db.scalars(select(LeaveType).where(LeaveType.deleted_at.is_(None), LeaveType.active.is_(True)))
     for leave_type in types:
@@ -579,6 +582,7 @@ def ensure_default_balances(db: Session, *, employee: Employee, year: int) -> No
                 existing.leave_type_id = leave_type.id
             if not float(existing.allocated or 0):
                 existing.allocated = float(existing.opening_balance or leave_type.annual_allocation or 0)
+                existing.remaining = float(existing.opening_balance or 0) + float(existing.allocated or 0) + float(existing.accrued or 0) - float(existing.used or 0)
             db.add(existing)
             continue
         allocation = float(leave_type.annual_allocation or leave_type.annual_quota or 0)
@@ -589,7 +593,7 @@ def ensure_default_balances(db: Session, *, employee: Employee, year: int) -> No
                 leave_type=leave_type.name,
                 year=year,
                 allocated=allocation,
-                opening_balance=allocation,
+                opening_balance=0.0,
                 accrued=0,
                 used=0,
                 remaining=allocation,

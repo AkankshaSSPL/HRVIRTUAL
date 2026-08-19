@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ScrollText, UserCircle, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { AppLayout, EmptyState, PageContainer, PageHeader, SectionCard, Timeline, LoadingSkeleton } from "@/components/ui-system";
+import { AppLayout, EmptyState, PageContainer, PageHeader, SectionCard, LoadingSkeleton } from "@/components/ui-system";
 import { Button } from "@/components/ui/button";
 import { getAuditLogs } from "@/services/audit";
 
@@ -16,19 +16,6 @@ export function AuditLogsPage() {
     queryFn: () => getAuditLogs(page * PAGE_SIZE, PAGE_SIZE),
     refetchInterval: 15000,
   });
-
-  const timelineItems = (data?.logs || []).map((log) => ({
-    id: log.id,
-    title: log.title,
-    time: new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }),
-    description: log.message,
-    meta: log.performed_by_name ? (
-      <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <UserCircle className="h-3.5 w-3.5" />
-        <span>{log.performed_by_name}</span>
-      </div>
-    ) : null,
-  }));
 
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -53,7 +40,7 @@ export function AuditLogsPage() {
               description="There was a problem retrieving the audit history."
             />
           </SectionCard>
-        ) : timelineItems.length === 0 ? (
+        ) : (data?.logs || []).length === 0 ? (
           <SectionCard>
             <EmptyState
               icon={ScrollText}
@@ -62,11 +49,50 @@ export function AuditLogsPage() {
             />
           </SectionCard>
         ) : (
-          <SectionCard>
-            <Timeline items={timelineItems} />
+          <div className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted/50 text-muted-foreground text-xs uppercase tracking-wider border-b">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Event</th>
+                    <th className="px-6 py-4 font-semibold">Description</th>
+                    <th className="px-6 py-4 font-semibold">Performed By</th>
+                    <th className="px-6 py-4 font-semibold text-right">Date & Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {(data?.logs || []).map((log) => (
+                    <tr key={log.id} className="transition-colors hover:bg-muted/30 group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-2 w-2 rounded-full bg-primary/40 transition-colors group-hover:bg-primary"></div>
+                          <span className="font-semibold text-foreground whitespace-nowrap">{log.title}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground">{log.message}</td>
+                      <td className="px-6 py-4">
+                        {log.performed_by_name ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                              <UserCircle className="h-4 w-4" />
+                            </div>
+                            <span className="font-medium whitespace-nowrap">{log.performed_by_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic whitespace-nowrap">System generated</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right text-muted-foreground whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             
             {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between border-t pt-4">
+              <div className="flex items-center justify-between border-t bg-muted/20 px-6 py-4">
                 <div className="text-sm text-muted-foreground">
                   Showing <span className="font-medium">{page * PAGE_SIZE + 1}</span> to{" "}
                   <span className="font-medium">{Math.min((page + 1) * PAGE_SIZE, total)}</span> of{" "}
@@ -94,7 +120,7 @@ export function AuditLogsPage() {
                 </div>
               </div>
             )}
-          </SectionCard>
+          </div>
         )}
       </PageContainer>
     </AppLayout>

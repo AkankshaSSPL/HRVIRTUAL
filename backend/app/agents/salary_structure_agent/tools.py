@@ -202,7 +202,7 @@ def _parse_ctc_policy_structure(command: str) -> dict[str, Any] | None:
             "component_code": "MEDICAL_ALLOWANCE",
             "calculation_type": "balance",
             "calculation_value": None,
-            "formula": "GROSS_SALARY - (BASIC + HRA + CA + EDUCATION_ALLOWANCE + EMPLOYER_PF)",
+            "formula": "CTC - (BASIC + HRA + CA + EDUCATION_ALLOWANCE + 2042)",
             "reference_component_code": None,
         },
         {

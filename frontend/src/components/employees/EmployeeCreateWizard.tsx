@@ -50,10 +50,19 @@ const steps = [
   { label: "Banking", icon: Landmark },
 ];
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isAllDigits(str: string): boolean {
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] < '0' || str[i] > '9') return false;
+  }
+  return true;
+}
 
 function isValidEmail(value: string): boolean {
-  return EMAIL_PATTERN.test(value.trim());
+  const parts = value.trim().split('@');
+  if (parts.length !== 2) return false;
+  if (!parts[1].includes('.')) return false;
+  if (parts[0].length === 0 || parts[1].length < 3) return false;
+  return true;
 }
 
 type StepErrors = Record<string, string>;
@@ -77,9 +86,25 @@ function validateStep0(form: typeof initialForm): StepErrors {
   }
   if (!form.phone?.trim()) {
     errors.phone = "Phone number is required";
+  } else {
+    const v = form.phone.replace(/[\s-]/g, "");
+    if (!isAllDigits(v) || v.length !== 10) {
+      errors.phone = "Must be exactly 10 digits";
+    }
   }
   if (!form.dob?.trim()) {
     errors.dob = "Date of birth is required";
+  } else {
+    const dobDate = new Date(form.dob);
+    const today = new Date();
+    let age = today.getFullYear() - dobDate.getFullYear();
+    const m = today.getMonth() - dobDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+      age--;
+    }
+    if (age < 18) {
+      errors.dob = "Employee must be at least 18 years old";
+    }
   }
   if (!form.gender?.trim()) {
     errors.gender = "Gender is required";
@@ -108,6 +133,11 @@ function validateStep2(form: typeof initialForm): StepErrors {
   }
   if (!form.zip_code?.trim()) {
     errors.zip_code = "Zip code is required";
+  } else {
+    const v = form.zip_code.trim();
+    if (!isAllDigits(v) || v.length !== 6) {
+      errors.zip_code = "Must be exactly 6 digits";
+    }
   }
   return errors;
 }
@@ -122,6 +152,11 @@ function validateStep3(emergencyContact: EmergencyContactForm): StepErrors {
   }
   if (!emergencyContact.phone.trim()) {
     errors.phone = "Phone number is required";
+  } else {
+    const v = emergencyContact.phone.replace(/[\s-]/g, "");
+    if (!isAllDigits(v) || v.length !== 10) {
+      errors.phone = "Must be exactly 10 digits";
+    }
   }
   return errors;
 }
@@ -130,19 +165,64 @@ function validateStep4(form: typeof initialForm): StepErrors {
   const errors: StepErrors = {};
   if (!form.bank_account_number?.trim()) {
     errors.bank_account_number = "Bank account number is required";
+  } else {
+    const v = form.bank_account_number.replace(/[\s-]/g, "");
+    if (!isAllDigits(v) || v.length < 9 || v.length > 12) {
+      errors.bank_account_number = "Must be between 9 and 12 digits";
+    }
   }
+  
   if (!form.ifsc_code?.trim()) {
     errors.ifsc_code = "IFSC code is required";
+  } else {
+    const v = form.ifsc_code.trim().toUpperCase();
+    let valid = true;
+    if (v.length !== 11 || v[4] !== '0') valid = false;
+    for (let i = 0; i < 4 && valid; i++) if (v[i] < 'A' || v[i] > 'Z') valid = false;
+    for (let i = 5; i < 11 && valid; i++) {
+        const c = v[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) valid = false;
+    }
+    if (!valid) {
+      errors.ifsc_code = "Invalid IFSC code format";
+    }
   }
+  
   if (!form.bank_branch?.trim()) {
     errors.bank_branch = "Bank branch is required";
   }
+  
   if (!form.pan_number?.trim()) {
     errors.pan_number = "PAN number is required";
+  } else {
+    const v = form.pan_number.trim().toUpperCase();
+    let valid = true;
+    if (v.length !== 10) valid = false;
+    for (let i = 0; i < 5 && valid; i++) if (v[i] < 'A' || v[i] > 'Z') valid = false;
+    for (let i = 5; i < 9 && valid; i++) if (v[i] < '0' || v[i] > '9') valid = false;
+    if (valid && (v[9] < 'A' || v[9] > 'Z')) valid = false;
+    
+    if (!valid) {
+      errors.pan_number = "Invalid PAN number format (e.g. ABCDE1234F)";
+    }
   }
+  
   if (!form.aadhaar_number?.trim()) {
     errors.aadhaar_number = "Aadhaar number is required";
+  } else {
+    const v = form.aadhaar_number.replace(/[\s-]/g, "");
+    if (!isAllDigits(v) || v.length !== 12) {
+      errors.aadhaar_number = "Must be exactly 12 digits";
+    }
   }
+
+  if (form.uan_number?.trim()) {
+    const v = form.uan_number.replace(/[\s-]/g, "");
+    if (!isAllDigits(v) || v.length !== 12) {
+      errors.uan_number = "Must be exactly 12 digits";
+    }
+  }
+  
   return errors;
 }
 

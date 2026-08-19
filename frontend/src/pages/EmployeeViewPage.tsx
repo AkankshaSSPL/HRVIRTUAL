@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Calendar, FileText, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, Mail, Phone, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, StatusBadge } from "@/components/ui-system";
+import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, StatusBadge, DocumentPreviewModal } from "@/components/ui-system";
 import { getEmployee, getEmployeeDocuments, type EmployeeDocumentRecord } from "@/services/employees";
+import { BACKEND_URL } from "@/services/api";
 
 type TabKey = "basic" | "employment" | "contact" | "banking" | "certifications" | "documents";
 
@@ -49,6 +50,7 @@ export function EmployeeViewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const employeeQuery = useQuery({
     queryKey: ["employee", id],
@@ -228,10 +230,22 @@ export function EmployeeViewPage() {
                                 </p>
                               </div>
                             </div>
-                            <StatusBadge
-                              status={doc.status.replace(/_/g, " ")}
-                              tone={doc.status === "VERIFIED" ? "success" : doc.status === "REJECTED" ? "danger" : "neutral"}
-                            />
+                            <div className="flex items-center gap-3">
+                              <StatusBadge
+                                status={doc.status.replace(/_/g, " ")}
+                                tone={doc.status === "VERIFIED" ? "success" : doc.status === "REJECTED" ? "danger" : "neutral"}
+                              />
+                              {doc.document_url ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewUrl(doc.document_url.startsWith("http") ? doc.document_url : `${BACKEND_URL}${doc.document_url.startsWith("/") ? "" : "/"}${doc.document_url}`)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                  title="View Document"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -242,6 +256,7 @@ export function EmployeeViewPage() {
             </div>
           </div>
         ) : null}
+        <DocumentPreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
       </PageContainer>
     </AppLayout>
   );

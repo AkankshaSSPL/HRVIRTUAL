@@ -1,10 +1,11 @@
 from typing import Any
+import re
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -57,19 +58,98 @@ class EmployeeCreateRequest(BaseModel):
     official_email: EmailStr
     personal_email: EmailStr
     phone: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        v_clean = v.replace(" ", "").replace("-", "")
+        if not v_clean.isdigit() or len(v_clean) != 10:
+            raise ValueError("Phone number must be exactly 10 digits")
+        return v_clean
+        
     dob: date
     gender: str
     address: str
+
+    @field_validator("dob")
+    @classmethod
+    def validate_dob(cls, v: date | None) -> date | None:
+        if v:
+            age = (date.today() - v).days / 365.25
+            if age < 18:
+                raise ValueError("Employee must be at least 18 years old")
+        return v
     zip_code: str
+
+    @field_validator("zip_code")
+    @classmethod
+    def validate_zip(cls, v: str) -> str:
+        v_clean = v.strip()
+        if not v_clean.isdigit() or len(v_clean) != 6:
+            raise ValueError("Zip code must be exactly 6 digits")
+        return v_clean
+        
     city: str
     bank_account_number: str
+
+    @field_validator("bank_account_number")
+    @classmethod
+    def validate_bank_account(cls, v: str) -> str:
+        v_clean = v.replace(" ", "").replace("-", "")
+        if not v_clean.isdigit() or not (9 <= len(v_clean) <= 12):
+            raise ValueError("Bank account number must be between 9 and 12 digits")
+        return v_clean
     ifsc_code: str
     bank_branch: str
     pan_number: str
     aadhaar_number: str
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar(cls, v: str) -> str:
+        v_clean = v.replace(" ", "").replace("-", "")
+        if not v_clean.isdigit() or len(v_clean) != 12:
+            raise ValueError("Aadhaar number must be exactly 12 digits")
+        return v_clean
+
+    @field_validator("pan_number")
+    @classmethod
+    def validate_pan(cls, v: str) -> str:
+        v_clean = v.strip().upper()
+        if len(v_clean) != 10 or not v_clean[0:5].isalpha() or not v_clean[5:9].isdigit() or not v_clean[9].isalpha():
+            raise ValueError("Invalid PAN number format")
+        return v_clean
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def validate_ifsc(cls, v: str) -> str:
+        v_clean = v.strip().upper()
+        if len(v_clean) != 11 or not v_clean[0:4].isalpha() or v_clean[4] != '0' or not v_clean[5:11].isalnum():
+            raise ValueError("Invalid IFSC code format")
+        return v_clean
+
+    @field_validator("uan_number")
+    @classmethod
+    def validate_uan(cls, v: str | None) -> str | None:
+        if v:
+            v_clean = v.replace(" ", "").replace("-", "")
+            if not v_clean.isdigit() or len(v_clean) != 12:
+                raise ValueError("UAN number must be exactly 12 digits")
+            return v_clean
+        return v
     uan_number: str | None = None
     current_salary: Decimal | None = None
     emergency_contact: dict[str, Any]
+
+    @field_validator("emergency_contact")
+    @classmethod
+    def validate_emergency_contact(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if v and "phone" in v:
+            phone_clean = v["phone"].replace(" ", "").replace("-", "")
+            if not phone_clean.isdigit() or len(phone_clean) != 10:
+                raise ValueError("Emergency contact phone number must be exactly 10 digits")
+            v["phone"] = phone_clean
+        return v
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -85,19 +165,110 @@ class EmployeeUpdateRequest(BaseModel):
     official_email: EmailStr | None = None
     personal_email: EmailStr | None = None
     phone: str | None = None
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.replace(" ", "").replace("-", "")
+            if not v_clean.isdigit() or len(v_clean) != 10:
+                raise ValueError("Phone number must be exactly 10 digits")
+            return v_clean
+        return v
+        
     dob: date | None = None
     gender: str | None = None
     address: str | None = None
+
+    @field_validator("dob")
+    @classmethod
+    def validate_dob(cls, v: date | None) -> date | None:
+        if v:
+            age = (date.today() - v).days / 365.25
+            if age < 18:
+                raise ValueError("Employee must be at least 18 years old")
+        return v
     zip_code: str | None = None
+
+    @field_validator("zip_code")
+    @classmethod
+    def validate_zip(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.strip()
+            if not v_clean.isdigit() or len(v_clean) != 6:
+                raise ValueError("Zip code must be exactly 6 digits")
+            return v_clean
+        return v
+        
     city: str | None = None
     bank_account_number: str | None = None
+
+    @field_validator("bank_account_number")
+    @classmethod
+    def validate_bank_account(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.replace(" ", "").replace("-", "")
+            if not v_clean.isdigit() or not (9 <= len(v_clean) <= 12):
+                raise ValueError("Bank account number must be between 9 and 12 digits")
+            return v_clean
+        return v
     ifsc_code: str | None = None
     bank_branch: str | None = None
     pan_number: str | None = None
     aadhaar_number: str | None = None
+
+    @field_validator("aadhaar_number")
+    @classmethod
+    def validate_aadhaar(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.replace(" ", "").replace("-", "")
+            if not v_clean.isdigit() or len(v_clean) != 12:
+                raise ValueError("Aadhaar number must be exactly 12 digits")
+            return v_clean
+        return v
+
+    @field_validator("pan_number")
+    @classmethod
+    def validate_pan(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.strip().upper()
+            if len(v_clean) != 10 or not v_clean[0:5].isalpha() or not v_clean[5:9].isdigit() or not v_clean[9].isalpha():
+                raise ValueError("Invalid PAN number format")
+            return v_clean
+        return v
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def validate_ifsc(cls, v: str | None) -> str | None:
+        if v is not None:
+            v_clean = v.strip().upper()
+            if len(v_clean) != 11 or not v_clean[0:4].isalpha() or v_clean[4] != '0' or not v_clean[5:11].isalnum():
+                raise ValueError("Invalid IFSC code format")
+            return v_clean
+        return v
+
+    @field_validator("uan_number")
+    @classmethod
+    def validate_uan(cls, v: str | None) -> str | None:
+        if v:
+            v_clean = v.replace(" ", "").replace("-", "")
+            if not v_clean.isdigit() or len(v_clean) != 12:
+                raise ValueError("UAN number must be exactly 12 digits")
+            return v_clean
+        return v
     uan_number: str | None = None
     current_salary: Decimal | None = None
     emergency_contact: dict[str, Any] | None = None
+
+    @field_validator("emergency_contact")
+    @classmethod
+    def validate_emergency_contact(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v and "phone" in v:
+            phone_clean = v["phone"].replace(" ", "").replace("-", "")
+            if not phone_clean.isdigit() or len(phone_clean) != 10:
+                raise ValueError("Emergency contact phone number must be exactly 10 digits")
+            v["phone"] = phone_clean
+        return v
     seat_label: str | None = None
 
 

@@ -101,11 +101,11 @@ def apply_leave(
 
 
 @router.get("/employees/{employee_id}/balances", dependencies=[Depends(require_permissions("employees:view"))])
-def employee_leave_balances(employee_id: str, db: Session = Depends(get_db)):
+def employee_leave_balances(employee_id: str, year: int | None = None, db: Session = Depends(get_db)):
     employee = get_employee_by_id(db, employee_id)
     if not employee:
         return []
-    return leave_balances(db, employee=employee)
+    return leave_balances(db, employee=employee, year=year)
 
 
 @router.get("/employees/{employee_id}/history", dependencies=[Depends(require_permissions("employees:view"))])
