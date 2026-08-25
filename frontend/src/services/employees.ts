@@ -36,6 +36,9 @@ export type EmployeeRecord = {
   reporting_manager_id?: string | null;
   seat_label?: string | null;
   onboarding_percent?: number | null;
+  user_id?: string | null;
+  face_registered?: boolean | null;
+  face_samples_count?: number | null;
 };
 
 export type EmployeeFormOptions = {

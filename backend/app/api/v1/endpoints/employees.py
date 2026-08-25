@@ -166,6 +166,13 @@ class EmployeeUpdateRequest(BaseModel):
     personal_email: EmailStr | None = None
     phone: str | None = None
 
+    @field_validator("official_email")
+    @classmethod
+    def validate_official_email(cls, v: EmailStr | None) -> EmailStr | None:
+        if v is None:
+            raise ValueError("Official email is required and cannot be null")
+        return v
+
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str | None) -> str | None:

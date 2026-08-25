@@ -526,10 +526,15 @@ def download_payroll_export(filename: str) -> FileResponse:
     file_path = STORAGE_DIR / filename
     if not file_path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export file not found. It may have expired — regenerate it.")
+    media = (
+        "application/vnd.ms-excel"
+        if filename.endswith(".xls")
+        else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
     return FileResponse(
         path=file_path,
         filename=filename,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        media_type=media,
     )
 
 

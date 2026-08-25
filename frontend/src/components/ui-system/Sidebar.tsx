@@ -20,6 +20,7 @@ import {
   Sparkles,
   UserPlus,
   Users,
+  UserCog,
   X,
 } from "lucide-react";
 
@@ -32,8 +33,17 @@ import { useAuthStore } from "@/stores/authStore";
 export const sidebarItems: SidebarMenuItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: Gauge, permission: "dashboard:view" },
   { name: "Employees", href: "/employees", icon: Users, permission: "employees:view" },
-  { name: "Candidates", href: "/candidates", icon: UserPlus, permission: "candidates:view" },
-  { name: "Onboarding", href: "/onboarding", icon: BadgeCheck, permission: "onboarding:view" },
+  { 
+    name: "Recruitment", 
+    href: "/candidates", 
+    icon: UserPlus, 
+    permission: "candidates:view",
+    children: [
+      { name: "Candidates", href: "/candidates" },
+      { name: "Offers", href: "/offers" },
+      { name: "Onboarding", href: "/onboarding" },
+    ]
+  },
   { name: "Seat Layout", href: "/seats", icon: LayoutGrid, permission: "employees:view" },
   { name: "Attendance", href: "/attendance", icon: CalendarClock, permission: "attendance:view" },
   { name: "Leave", href: "/leave", icon: ClipboardCheck, permission: "leave:view" },
@@ -53,6 +63,16 @@ export const sidebarItems: SidebarMenuItem[] = [
       { name: "Organization", href: "/masters?group=organization" },
       { name: "Attendance & Leave", href: "/masters?group=attendance_leave" },
       { name: "Company Settings", href: "/masters?group=company_settings" },
+    ],
+  },
+  {
+    name: "System Users",
+    href: "/system-users/users",
+    icon: UserCog,
+    permission: "settings:view",
+    children: [
+      { name: "Users", href: "/system-users/users" },
+      { name: "Roles", href: "/system-users/roles" },
     ],
   },
   { name: "Settings", href: "/settings", icon: Settings, permission: "settings:view" },

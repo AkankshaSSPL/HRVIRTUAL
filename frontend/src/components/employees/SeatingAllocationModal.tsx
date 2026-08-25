@@ -74,7 +74,7 @@ export function SeatingAllocationModal({ open, employeeId, currentSeat: provided
     (seatsQuery.data?.seats ?? []).map((seat) => [seat.label, seat]),
   );
   
-  const currentSeat = providedCurrentSeat ?? (seatsQuery.data?.seats ?? []).find((s) => s.occupant_id === employeeId)?.label ?? null;
+  const currentSeat = providedCurrentSeat ?? (seatsQuery.data?.seats ?? []).find((s) => s.employee_id === employeeId)?.label ?? null;
 
   async function invalidateAssetQueries() {
     await queryClient.invalidateQueries({ queryKey: ["employee-onboarding-progress", employeeId] });

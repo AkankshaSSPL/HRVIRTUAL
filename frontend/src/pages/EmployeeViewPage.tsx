@@ -5,10 +5,11 @@ import { ArrowLeft, Building2, Calendar, FileText, Mail, Phone, ExternalLink } f
 
 import { Button } from "@/components/ui/button";
 import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, StatusBadge, DocumentPreviewModal } from "@/components/ui-system";
+import { FaceBiometricTab } from "@/components/employees/FaceBiometricTab";
 import { getEmployee, getEmployeeDocuments, type EmployeeDocumentRecord } from "@/services/employees";
 import { BACKEND_URL } from "@/services/api";
 
-type TabKey = "basic" | "employment" | "contact" | "banking" | "certifications" | "documents";
+type TabKey = "basic" | "employment" | "contact" | "banking" | "certifications" | "documents" | "face";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "basic", label: "Basic Info" },
@@ -17,6 +18,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "banking", label: "Banking" },
   { key: "certifications", label: "Certifications" },
   { key: "documents", label: "Documents" },
+  { key: "face", label: "Face Biometric" },
 ];
 
 function initials(name?: string | null) {
@@ -249,6 +251,19 @@ export function EmployeeViewPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === "face" ? (
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">Face Biometric</h3>
+                    <div className="mt-4">
+                      <FaceBiometricTab
+                        userId={employee.user_id ?? null}
+                        faceRegistered={Boolean(employee.face_registered)}
+                        faceSamplesCount={employee.face_samples_count ?? 0}
+                      />
                     </div>
                   </div>
                 ) : null}

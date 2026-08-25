@@ -32,6 +32,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.models.auth.models import FaceLoginAttempt  # noqa: F401
 from app.models.base import Base
 
 __all__ = [
@@ -68,4 +69,5 @@ __all__ = [
     "RolePermission",
     "User",
     "UserRole",
+    "FaceLoginAttempt",
 ]

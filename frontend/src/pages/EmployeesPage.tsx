@@ -39,6 +39,20 @@ const columns: ColumnDef<EmployeeRecord>[] = [
       />
     ),
   },
+  {
+    accessorKey: "face_registered",
+    header: "Face",
+    cell: ({ row }) => (
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.original.face_registered
+            ? "bg-emerald-100 text-emerald-700"
+            : "bg-slate-100 text-slate-500"
+          }`}
+      >
+        {row.original.face_registered ? "Enrolled" : "None"}
+      </span>
+    ),
+  },
 ];
 
 export function EmployeesPage() {

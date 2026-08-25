@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint, LargeBinary, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,10 +47,18 @@ class User(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    face_embedding: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    face_registered: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    face_samples_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
 
     roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users", lazy="selectin")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     employee_profile: Mapped["Employee | None"] = relationship(back_populates="user", uselist=False)
+    face_login_attempts: Mapped[list["FaceLoginAttempt"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     @property
     def full_name(self) -> str:
@@ -95,3 +103,28 @@ class RefreshToken(BaseModel):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="refresh_tokens")
+
+
+class FaceLoginAttempt(BaseModel):
+    """One row per face login attempt — pass or fail."""
+
+    __tablename__ = "face_login_attempts"
+    __table_args__ = (
+        Index("ix_face_login_attempts_user_id", "user_id"),
+        Index("ix_face_login_attempts_success", "success"),
+    )
+
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    user: Mapped["User | None"] = relationship(
+        "User", back_populates="face_login_attempts"
+    )

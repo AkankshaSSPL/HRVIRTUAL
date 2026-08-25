@@ -81,7 +81,9 @@ function validateStep0(form: typeof initialForm): StepErrors {
   } else if (!isValidEmail(form.personal_email)) {
     errors.personal_email = "Enter a valid email address";
   }
-  if (form.official_email && form.official_email.trim() && !isValidEmail(form.official_email)) {
+  if (!form.official_email.trim()) {
+    errors.official_email = "Official email is required";
+  } else if (!isValidEmail(form.official_email)) {
     errors.official_email = "Enter a valid email address";
   }
   if (!form.phone?.trim()) {
@@ -341,7 +343,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               <Field label="Employee ID" hint="Auto-generated on save">
                 <Input value="" disabled placeholder="Auto-generated on save" />
               </Field>
-              <Field label="Official email" error={showErrors ? step0Errors.official_email : undefined}>
+              <Field label="Official email" required error={showErrors ? step0Errors.official_email : undefined}>
                 <Input type="email" value={form.official_email} onChange={(event) => setValue("official_email", event.target.value)} placeholder="e.g. john@example.com" />
               </Field>
               <Field label="Personal email" required error={showErrors ? step0Errors.personal_email : undefined} success={Boolean(form.personal_email?.trim())}>
@@ -438,10 +440,10 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
               <Field label="Base salary">
                 <Input type="number" min="0" step="0.01" value={currentSalary} onChange={(event) => setCurrentSalary(event.target.value)} placeholder="e.g. 50000.00" />
               </Field>
-              <Field label="PAN number" error={showErrors ? stepErrors.pan_number : undefined} required success={Boolean(form.pan_number?.trim())}>
+              <Field label="PAN number" error={showErrors ? step4Errors.pan_number : undefined} required success={Boolean(form.pan_number?.trim())}>
                 <Input value={form.pan_number} onChange={(event) => setValue("pan_number", event.target.value.toUpperCase())} placeholder="e.g. ABCDE1234F" />
               </Field>
-              <Field label="Aadhaar number" error={showErrors ? stepErrors.aadhaar_number : undefined} required success={Boolean(form.aadhaar_number?.trim())}>
+              <Field label="Aadhaar number" error={showErrors ? step4Errors.aadhaar_number : undefined} required success={Boolean(form.aadhaar_number?.trim())}>
                 <Input value={form.aadhaar_number} onChange={(event) => setValue("aadhaar_number", event.target.value)} placeholder="e.g. 1234 5678 9012" />
               </Field>
               <Field label="UAN number">

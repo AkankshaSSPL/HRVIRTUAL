@@ -3,9 +3,9 @@ import { Bell } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 
-import { getEmployees } from "@/services/employees";
-import { getPendingLeaveRequests, getLeaveCalendar } from "@/services/leave";
 import { Button } from "@/components/ui/button";
+import { apiGet } from "@/services/api";
+import { useAuthStore } from "@/stores/authStore";
 
 export function NotificationsDropdown() {
   const navigate = useNavigate();
@@ -23,53 +23,28 @@ export function NotificationsDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const { user } = useAuthStore();
+  const isEmployeeOnly = user?.roles?.includes("Employee") && !user?.roles?.includes("Super Admin") && !user?.roles?.includes("HR");
+
   // Fetch data
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: getEmployees, refetchInterval: 30000 });
-  const { data: pendingLeaves } = useQuery({ queryKey: ["pending-leaves"], queryFn: getPendingLeaveRequests, refetchInterval: 30000 });
-  const { data: calendar } = useQuery({ queryKey: ["leave-calendar"], queryFn: getLeaveCalendar, refetchInterval: 30000 });
+  const { data } = useQuery({ 
+    queryKey: ["notifications"], 
+    queryFn: () => apiGet<{ notifications: Array<{ id: string, title: string, description: string, action_type: string }> }>("/notifications"), 
+    refetchInterval: 30000 
+  });
 
-  // Process notifications
-  const notifications = [];
-
-  // 1. Pending Approvals
-  if (pendingLeaves?.length) {
-    notifications.push({
-      id: "pending-leaves",
-      title: `${pendingLeaves.length} Pending Leave Approval${pendingLeaves.length > 1 ? "s" : ""}`,
-      description: "You have leave requests waiting for review.",
-      action: () => navigate("/leave"),
-    });
-  }
-
-  // 2. Pending Onboarding
-  const pendingOnboarding = employees?.items.filter((e) => e.onboarding_percent !== null && e.onboarding_percent !== undefined && e.onboarding_percent < 100) || [];
-  if (pendingOnboarding.length) {
-    notifications.push({
-      id: "pending-onboarding",
-      title: `${pendingOnboarding.length} Pending Onboarding${pendingOnboarding.length > 1 ? "s" : ""}`,
-      description: pendingOnboarding.map(e => e.name ?? e.first_name).slice(0, 3).join(", ") + (pendingOnboarding.length > 3 ? "..." : ""),
-      action: () => navigate("/employees"),
-    });
-  }
-
-  // 3. Absent / On Leave Today
-  const today = new Date().toISOString().split("T")[0];
-  const absentToday = calendar?.filter((c) => {
-    if (c.status !== "APPROVED") return false;
-    const from = c.from_date ?? c.start_date;
-    const to = c.to_date ?? c.end_date ?? from;
-    if (!from || !to) return false;
-    return from <= today && to >= today;
-  }) || [];
+  let notifications = data?.notifications || [];
   
-  if (absentToday.length) {
-    notifications.push({
-      id: "absent-today",
-      title: `${absentToday.length} Employee${absentToday.length > 1 ? "s" : ""} on Leave Today`,
-      description: absentToday.map((c) => c.employee_name).join(", "),
-      action: () => navigate("/leave"),
-    });
+  if (isEmployeeOnly) {
+    notifications = notifications.filter(n => n.action_type !== "employees" && !n.title.toLowerCase().includes("onboarding"));
   }
+
+  const handleAction = (type: string) => {
+    if (type === "leave") navigate("/leave");
+    else if (type === "employees") navigate("/employees");
+    else if (type === "calendar") navigate("/leave");
+    setIsOpen(false);
+  };
 
   const hasUnread = notifications.length > 0;
 
@@ -98,10 +73,7 @@ export function NotificationsDropdown() {
               notifications.map((notif) => (
                 <button 
                   key={notif.id} 
-                  onClick={() => {
-                    setIsOpen(false);
-                    if (notif.action) notif.action();
-                  }}
+                  onClick={() => handleAction(notif.action_type)}
                   className="flex flex-col items-start gap-1 rounded-md px-3 py-3 text-sm text-left transition-colors hover:bg-muted"
                 >
                   <span className="font-semibold text-foreground">{notif.title}</span>

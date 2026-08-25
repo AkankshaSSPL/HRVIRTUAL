@@ -12,6 +12,8 @@ import {
   SectionCard,
   StatCard,
 } from "@/components/ui-system";
+import { EmployeeDashboard } from "@/components/dashboard/EmployeeDashboard";
+import { useAuthStore } from "@/stores/authStore";
 import { apiGet } from "@/services/api";
 import { getEmployees } from "@/services/employees";
 
@@ -60,7 +62,7 @@ function WelcomeBanner({ totalPresent = 45 }: { totalPresent?: number }) {
   );
 }
 
-export function DashboardPage() {
+function AdminDashboard() {
   const navigate = useNavigate();
   const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: getEmployees, refetchInterval: 15000 });
   const statsQuery = useQuery({ queryKey: ["dashboard-stats"], queryFn: getDashboardStats, refetchInterval: 15000 });
@@ -71,7 +73,6 @@ export function DashboardPage() {
   );
 
   return (
-    <AppLayout>
       <PageContainer>
         <PageHeader
           title="Dashboard"
@@ -158,6 +159,21 @@ export function DashboardPage() {
           <EmptyState title="No agent activity yet" description="Runtime events will appear here after agent workflows are executed." />
         </SectionCard>
       </PageContainer>
+  );
+}
+
+export function DashboardPage() {
+  const { user } = useAuthStore();
+  
+  // Check if the user has ONLY the Employee role (or if Employee is their primary role we want to show this for)
+  // For safety, if they are Super Admin or HR, show the Admin dashboard.
+  const isSuperAdmin = user?.roles?.includes("Super Admin");
+  const isHR = user?.roles?.includes("HR");
+  const isEmployeeOnly = user?.roles?.includes("Employee") && !isSuperAdmin && !isHR;
+
+  return (
+    <AppLayout>
+      {isEmployeeOnly ? <EmployeeDashboard /> : <AdminDashboard />}
     </AppLayout>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Bell, Menu, Search, UserCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -5,18 +6,24 @@ import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui-system/Breadcrumbs";
 import { SearchBar } from "@/components/ui-system/SearchBar";
 import { NotificationsDropdown } from "@/components/ui-system/NotificationsDropdown";
+import { UserDropdown } from "@/components/ui-system/UserDropdown";
+import { UserProfileModal } from "@/components/auth/UserProfileModal";
 import { useAppStore } from "@/stores/appStore";
 import { useAuthStore } from "@/stores/authStore";
 
 export function Header() {
   const navigate = useNavigate();
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
-  const user = useAuthStore((state) => state.user);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const logout = useAuthStore((state) => state.logout);
 
   async function handleLogout() {
     await logout();
     navigate("/login", { replace: true });
+  }
+
+  function handleProfile() {
+    setIsProfileOpen(true);
   }
 
   return (
@@ -32,10 +39,8 @@ export function Header() {
         <Search className="h-5 w-5" />
       </Button>
       <NotificationsDropdown />
-      <Button variant="outline" className="hidden gap-2 sm:inline-flex" onClick={handleLogout}>
-        <UserCircle className="h-4 w-4" />
-        {user?.full_name ?? "Profile"}
-      </Button>
+      <UserDropdown onLogout={handleLogout} onProfile={handleProfile} />
+      <UserProfileModal open={isProfileOpen} onOpenChange={setIsProfileOpen} />
     </header>
   );
 }

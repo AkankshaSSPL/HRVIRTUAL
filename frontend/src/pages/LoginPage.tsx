@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -9,6 +9,7 @@ import {
   FileCheck2,
   Fingerprint,
   LockKeyhole,
+  ScanFace,
   ShieldCheck,
   Sparkles,
   Workflow,
@@ -21,6 +22,10 @@ import { Input } from "@/components/ui/input";
 import { AppLayout, ErrorState } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import { meRequest } from "@/services/auth";
+import { canvasToBase64, detectFaces, faceLoginRequest } from "@/services/faceAuth";
+
+const REFRESH_TOKEN_KEY = "agentic_hrms_refresh_token";
 
 const agentCards = [
   { name: "Payroll Agent", status: "Cycle validation", icon: FileCheck2, tone: "text-sky-200", delay: 0 },
@@ -129,6 +134,8 @@ function OperationsIllustration() {
   );
 }
 
+type LoginMode = "password" | "face";
+
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -140,7 +147,48 @@ export function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [loginMode, setLoginMode] = useState<LoginMode>("password");
+  const [faceError, setFaceError] = useState<string | null>(null);
+  const [faceSubmitting, setFaceSubmitting] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/dashboard";
+
+  useEffect(() => {
+    if (loginMode !== "face") {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    setCameraError(null);
+
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch {
+        if (!cancelled) setCameraError("Could not access the camera. Check permissions and try again.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, [loginMode]);
 
   if (user) {
     return <Navigate to={from} replace />;
@@ -154,6 +202,47 @@ export function LoginPage() {
       navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in");
+    }
+  }
+
+  async function handleFaceLogin() {
+    if (!videoRef.current || !canvasRef.current) return;
+    setFaceError(null);
+    setFaceSubmitting(true);
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const b64 = canvasToBase64(canvas);
+
+      const { face_count } = await detectFaces(b64);
+      if (face_count === 0) {
+        setFaceError("No face detected. Center your face in the frame and try again.");
+        return;
+      }
+      if (face_count > 1) {
+        setFaceError("Multiple faces detected. Make sure only you are in frame.");
+        return;
+      }
+
+      const tokens = await faceLoginRequest(b64);
+      sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+      const loggedInUser = await meRequest(tokens.access_token);
+      useAuthStore.setState({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        user: loggedInUser,
+        status: "authenticated",
+      });
+      navigate(from, { replace: true });
+    } catch (err) {
+      setFaceError(err instanceof Error ? err.message : "Face not recognized");
+    } finally {
+      setFaceSubmitting(false);
     }
   }
 
@@ -231,62 +320,113 @@ export function LoginPage() {
                     Enterprise workspace secured with JWT sessions, refresh rotation, and role-based permissions.
                   </p>
                 </div>
+
+                <div className="inline-flex w-full items-center gap-1 rounded-lg border bg-muted/40 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode("password")}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      loginMode === "password"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoginMode("face")}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      loginMode === "face"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Face Login
+                  </button>
+                </div>
               </CardHeader>
               <CardContent className="p-6 pt-0">
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                  {error ? <ErrorState title="Login failed" message={error} /> : null}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="email">
-                      Work email
-                    </label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="name@company.com"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      autoComplete="email"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium" htmlFor="password">
-                      Password
-                    </label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={remember}
-                        onChange={(event) => setRemember(event.target.checked)}
-                        className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                {loginMode === "password" ? (
+                  <form className="space-y-4" onSubmit={handleSubmit}>
+                    {error ? <ErrorState title="Login failed" message={error} /> : null}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium" htmlFor="email">
+                        Work email
+                      </label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="name@company.com"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        autoComplete="email"
+                        required
                       />
-                      Remember this workspace
-                    </label>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      Secure session
-                    </span>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium" htmlFor="password">
+                        Password
+                      </label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        autoComplete="current-password"
+                        required
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={remember}
+                          onChange={(event) => setRemember(event.target.checked)}
+                          className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                        />
+                        Remember this workspace
+                      </label>
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        Secure session
+                      </span>
+                    </div>
+                    <Button className="h-11 w-full" type="submit" disabled={status === "loading"}>
+                      {status === "loading" ? (
+                        <Activity className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <LockKeyhole className="h-4 w-4" />
+                      )}
+                      {status === "loading" ? "Verifying workspace" : "Continue securely"}
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    {faceError ? <ErrorState title="Face login failed" message={faceError} /> : null}
+                    <div className="relative overflow-hidden rounded-lg border border-border/80 bg-slate-950 aspect-video">
+                      <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                      <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                    {cameraError ? <p className="text-sm text-destructive">{cameraError}</p> : null}
+                    <Button
+                      className="h-11 w-full"
+                      type="button"
+                      onClick={handleFaceLogin}
+                      disabled={faceSubmitting || !!cameraError}
+                    >
+                      {faceSubmitting ? (
+                        <Activity className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ScanFace className="h-4 w-4" />
+                      )}
+                      {faceSubmitting ? "Verifying face" : "Login with Face"}
+                    </Button>
                   </div>
-                  <Button className="h-11 w-full" type="submit" disabled={status === "loading"}>
-                    {status === "loading" ? (
-                      <Activity className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <LockKeyhole className="h-4 w-4" />
-                    )}
-                    {status === "loading" ? "Verifying workspace" : "Continue securely"}
-                  </Button>
-                </form>
+                )}
                 <div className="mt-6 flex items-center justify-center gap-2 border-t pt-5 text-xs text-muted-foreground">
                   <CheckCircle2 className="h-3.5 w-3.5 text-secondary" />
                   Protected by enterprise RBAC and audit-ready access controls

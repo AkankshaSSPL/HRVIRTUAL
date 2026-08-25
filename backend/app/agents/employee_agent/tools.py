@@ -11,7 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.security import get_password_hash
-from app.models.auth import User
+from app.models.auth import User, Role
 from app.models.employee import Department, Designation, Employee
 from app.models.employee.models import EmploymentStatus, EmploymentType
 
@@ -60,6 +60,9 @@ def employee_to_summary(employee: Employee) -> dict[str, Any]:
         "salary": salary_to_display(employee.current_salary),
         "profile_photo": employee.profile_photo,
         "seat_label": employee.seat_label,
+        "face_registered": bool(employee.face_registered),
+        "face_samples_count": employee.face_samples_count or 0,
+        "user_id": str(employee.user_id) if employee.user_id else None,
     }
 
 
@@ -368,16 +371,25 @@ def create_employee_draft(db: Session, payload: dict[str, Any]) -> tuple[Employe
         raise ValueError("joining_date is required and cannot be inferred")
     if first_name and official_email:
         existing_user = db.scalar(select(User).where(User.email == official_email))
-        user = existing_user or User(
-            email=official_email,
-            password_hash=get_password_hash(uuid4().hex),
-            first_name=first_name,
-            last_name=last_name or "Employee",
-            is_active=True,
-            is_superuser=False,
-        )
-        db.add(user)
-        db.flush()
+        if not existing_user:
+            user = User(
+                email=official_email,
+                password_hash=get_password_hash(uuid4().hex),
+                first_name=first_name,
+                last_name=last_name or "Employee",
+                is_active=True,
+                is_superuser=False,
+            )
+            
+            # Auto-assign the 'Employee' role if it exists
+            employee_role = db.scalar(select(Role).where(Role.name == "Employee"))
+            if employee_role:
+                user.roles.append(employee_role)
+                
+            db.add(user)
+            db.flush()
+        else:
+            user = existing_user
 
     employee = Employee(
         user_id=user.id if user else None,

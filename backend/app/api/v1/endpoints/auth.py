@@ -21,6 +21,9 @@ def serialize_user(user: User) -> CurrentUserResponse:
         is_superuser=user.is_superuser,
         roles=sorted(role.name for role in user.roles),
         permissions=permissions,
+        employment_type=str(user.employee_profile.employment_type) if user.employee_profile else None,
+        face_registered=user.face_registered,
+        face_samples_count=user.face_samples_count,
     )
 
 

@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     smtp_from: str = Field(default="", validation_alias="SMTP_FROM")
     email_enabled: bool = Field(default=True, validation_alias="EMAIL_ENABLED")
 
+    # --- Face authentication (NEW) ---
+    face_models_dir: str = Field(default="data/face_models", validation_alias="FACE_MODELS_DIR")
+    face_distance_threshold: float = Field(default=1.4, validation_alias="FACE_DISTANCE_THRESHOLD")
+
 
 @lru_cache
 def get_settings() -> Settings:

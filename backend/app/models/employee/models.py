@@ -1,8 +1,10 @@
 from datetime import date, datetime
+from decimal import Decimal
+import enum
 from enum import StrEnum
 import uuid
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, Time, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, LargeBinary, Numeric, String, Text, Time, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,7 +31,7 @@ class Gender(StrEnum):
     UNDISCLOSED = "UNDISCLOSED"
 
 
-class CandidateStatus(StrEnum):
+class CandidateStatus(str, enum.Enum):
     NEW = "NEW"
     SCREENING = "SCREENING"
     INTERVIEW = "INTERVIEW"
@@ -37,6 +39,22 @@ class CandidateStatus(StrEnum):
     HIRED = "HIRED"
     REJECTED = "REJECTED"
     ARCHIVED = "ARCHIVED"
+
+
+class OfferStatus(str, enum.Enum):
+    DRAFT = "Draft"
+    SENT = "Sent"
+    ACCEPTED = "Accepted"
+    NEGOTIATING = "Negotiating"
+    DECLINED = "Declined"
+    EXPIRED = "Expired"
+    ARCHIVED = "ARCHIVED"
+
+
+class RecordType(StrEnum):
+    AWARD = "AWARD"
+    WARNING = "WARNING"
+    COMPLAINT = "COMPLAINT"
 
 
 class DocumentStatus(StrEnum):
@@ -168,7 +186,7 @@ class Employee(BaseModel):
     department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"))
     designation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("designations.id"))
     reporting_manager_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id"))
-    official_email: Mapped[str | None] = mapped_column(String(320))
+    official_email: Mapped[str] = mapped_column(String(320), nullable=False)
     personal_email: Mapped[str | None] = mapped_column(String(320), index=True)
     phone: Mapped[str | None] = mapped_column(String(40), index=True)
     dob: Mapped[date | None] = mapped_column(Date)
@@ -199,6 +217,14 @@ class Employee(BaseModel):
     leave_requests: Mapped[list["LeaveRequest"]] = relationship(back_populates="employee")
     leave_balances: Mapped[list["LeaveBalance"]] = relationship(back_populates="employee")
     payroll_items: Mapped[list["PayrollRunItem"]] = relationship(back_populates="employee")
+    records: Mapped[list["EmployeeRecord"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    @property
+    def face_registered(self) -> bool:
+        return self.user.face_registered if self.user else False
+
+    @property
+    def face_samples_count(self) -> int:
+        return self.user.face_samples_count if self.user else 0
 
 
 class Candidate(BaseModel):
@@ -216,6 +242,23 @@ class Candidate(BaseModel):
     expected_ctc: Mapped[float | None] = mapped_column(Numeric(14, 2))
     notice_period: Mapped[str | None] = mapped_column(String(80))
     candidate_status: Mapped[CandidateStatus] = mapped_column(String(40), nullable=False, default=CandidateStatus.NEW)
+
+
+class EmployeeOffer(BaseModel):
+    __tablename__ = "employee_offers"
+    __table_args__ = (
+        Index("ix_employee_offers_employee_id", "employee_id"),
+        Index("ix_employee_offers_status", "status"),
+    )
+
+    employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    salary: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    expires_at: Mapped[date] = mapped_column(Date, nullable=False)
+    offer_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[OfferStatus] = mapped_column(String(40), nullable=False, default=OfferStatus.DRAFT)
+
+    employee: Mapped["Employee"] = relationship()
 
 
 class ResumeUpload(BaseModel):
@@ -363,3 +406,15 @@ class Notification(BaseModel):
     channel: Mapped[str | None] = mapped_column(String(60))
     status: Mapped[NotificationStatus] = mapped_column(String(40), nullable=False, default=NotificationStatus.UNREAD)
     payload_json: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class EmployeeRecord(BaseModel):
+    __tablename__ = "employee_records"
+
+    employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    record_type: Mapped[RecordType] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    date_issued: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
+
+    employee: Mapped["Employee"] = relationship(back_populates="records")

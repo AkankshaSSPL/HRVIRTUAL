@@ -106,7 +106,11 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   }
 
   const payload = {
-    ...Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value === "" ? null : value])),
+    ...Object.fromEntries(
+      Object.entries(form)
+        .filter(([_, value]) => typeof value !== "string" || !value.includes("*"))
+        .map(([key, value]) => [key, value === "" ? null : value])
+    ),
     current_salary: currentSalary === "" ? null : Number(currentSalary),
   } as Partial<EmployeeCreatePayload>;
 
@@ -257,11 +261,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
             </div>
           </div>
 
-          {!isFormValid && (
-            <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-              Please provide all required fields, including the <strong>Official email</strong> on the Personal tab, before saving.
-            </p>
-          )}
+
           {updateMutation.isError ? <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{updateMutation.error instanceof Error ? updateMutation.error.message : "Employee update could not be saved."}</p> : null}
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="outline" onClick={onClose}>Cancel</Button>

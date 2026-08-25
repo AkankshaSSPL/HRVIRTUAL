@@ -21,7 +21,7 @@ interface PayrollRunCardProps {
   onDismiss?: () => void;
 }
 
-const STATUS_LABELS: Record<string, { label: string; tone: "success" | "warning" | "neutral" | "error" }> = {
+const STATUS_LABELS: Record<string, { label: string; tone: "success" | "warning" | "neutral" | "danger" }> = {
   DRAFT: { label: "Draft", tone: "neutral" },
   PENDING_APPROVAL: { label: "Pending Approval", tone: "warning" },
   APPROVED: { label: "Approved", tone: "success" },

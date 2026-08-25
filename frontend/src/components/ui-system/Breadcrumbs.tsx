@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
 import { getEmployee } from "@/services/employees";
+import { getRole } from "@/services/system";
 
 const labels: Record<string, string> = {
   "agent-command": "Agent Command",
@@ -33,6 +34,17 @@ export function Breadcrumbs({ className }: { className?: string }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // /system-users/roles/:id[...] — resolve the role ID to the role's name
+  const roleIdSegment =
+    segments[1] === "roles" && segments[2] && UUID_RE.test(segments[2]) ? segments[2] : undefined;
+
+  const roleQuery = useQuery({
+    queryKey: ["roles", roleIdSegment],
+    queryFn: () => getRole(roleIdSegment!),
+    enabled: Boolean(roleIdSegment),
+    staleTime: 5 * 60 * 1000,
+  });
+
   return (
     <nav className={cn("flex min-w-0 items-center gap-1 text-xs text-muted-foreground", className)} aria-label="Breadcrumb">
       <Link to="/dashboard" className="inline-flex items-center gap-1 hover:text-foreground">
@@ -42,7 +54,12 @@ export function Breadcrumbs({ className }: { className?: string }) {
       {segments.map((segment, index) => {
         const href = `/${segments.slice(0, index + 1).join("/")}`;
         const current = index === segments.length - 1;
-        const label = segment === employeeIdSegment ? employeeQuery.data?.name ?? segment : toLabel(segment);
+        let label = toLabel(segment);
+        if (segment === employeeIdSegment) {
+          label = employeeQuery.data?.name ?? segment;
+        } else if (segment === roleIdSegment) {
+          label = roleQuery.data?.name ?? segment;
+        }
         return (
           <span key={href} className="flex min-w-0 items-center gap-1">
             <ChevronRight className="h-3.5 w-3.5 shrink-0" />

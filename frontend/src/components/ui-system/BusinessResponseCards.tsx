@@ -45,6 +45,10 @@ export type EmployeeCardData = {
   pan_number?: string | null;
   aadhaar_number?: string | null;
   uan_number?: string | null;
+  seat_label?: string | null;
+  face_registered?: boolean | null;
+  face_samples_count?: number | null;
+  user_id?: string | null;
 };
 
 export type CandidateCardData = {
@@ -725,6 +729,7 @@ export function EmployeeProfileDrawer({
   activeTab?: string;
   onTabChange?: (tab: string) => void;
   onOpenSeatAssignment?: () => void;
+  onManageAssets?: () => void;
 }) {
   const [internalTab, setInternalTab] = useState(initialTab);
   const tab = activeTab ?? internalTab;

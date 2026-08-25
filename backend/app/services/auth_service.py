@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.models.auth import Permission, RefreshToken, Role, User
 
-ROLE_NAMES = ["Super Admin", "HR Admin", "HR Executive", "Manager", "Employee"]
+ROLE_NAMES = ["Super Admin", "HR", "Employee"]
 
 PERMISSIONS = {
     "dashboard:view": "View dashboard",
@@ -39,11 +39,14 @@ PERMISSIONS = {
     "audit_logs:view": "View audit logs",
     "settings:view": "View settings",
     "settings:manage": "Manage settings",
+    "face:enroll": "Enroll and remove employee face biometrics",
+    "face:view_logs": "View face login attempt audit log",
+    "face:retrain": "Trigger face KNN classifier retrain",
 }
 
 ROLE_PERMISSION_CODES = {
     "Super Admin": list(PERMISSIONS),
-    "HR Admin": [
+    "HR": [
         "dashboard:view",
         "employees:view",
         "employees:manage",
@@ -65,23 +68,9 @@ ROLE_PERMISSION_CODES = {
         "audit_logs:view",
         "settings:view",
         "settings:manage",
+        "face:enroll",
+        "face:view_logs",
     ],
-    "HR Executive": [
-        "dashboard:view",
-        "employees:view",
-        "employees:manage",
-        "candidates:view",
-        "onboarding:view",
-        "attendance:view",
-        "attendance:manage",
-        "leave:view",
-        "leave:manage",
-        "documents:view",
-        "documents:manage",
-        "assets:view",
-        "approvals:view",
-    ],
-    "Manager": ["dashboard:view", "employees:view", "attendance:view", "leave:view", "approvals:view"],
     "Employee": ["dashboard:view", "documents:view", "leave:view"],
 }
 

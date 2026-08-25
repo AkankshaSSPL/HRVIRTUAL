@@ -53,7 +53,7 @@ def _make_last_row_bold(ws):
 STORAGE_DIR = Path(__file__).resolve().parents[2] / "storage" / "payroll"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-_SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9_\-]+\.xlsx$")
+_SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9_\-]+\.xlsx?$")
 
 
 def is_safe_filename(filename: str) -> bool:
@@ -67,7 +67,8 @@ def _month_label(month: int, year: int) -> str:
 
 
 def _new_filename(export_type: str, month: int, year: int) -> str:
-    return f"payroll_{export_type}_{year}{month:02d}_{uuid.uuid4().hex[:8]}.xlsx"
+    ext = "xls" if export_type == "bank" else "xlsx"
+    return f"payroll_{export_type}_{year}{month:02d}_{uuid.uuid4().hex[:8]}.{ext}"
 
 
 def _load_items_with_employees(db: Session, payroll_run: PayrollRun) -> list[PayrollRunItem]:
@@ -238,48 +239,88 @@ def generate_consultant_sheet(db: Session, payroll_run: PayrollRun, company: Com
 
 
 def generate_bank_sheet(db: Session, payroll_run: PayrollRun, company: CompanySettings, is_preview: bool = False) -> str | dict:
-    """Bank upload sheet — matching provided formatting."""
+    """Bank upload sheet — Excel 97-2003 (.xls) format via xlwt."""
+    import xlwt
+
     items = _load_items_with_employees(db, payroll_run)
 
-    wb = MockWorkbook() if is_preview else Workbook()
-    ws = wb.active
-    ws.title = "Bank Sheet"
-    
+    if is_preview:
+        # Preview mode still uses the mock approach
+        wb = MockWorkbook()
+        ws = wb.active
+        ws.title = "Bank Sheet"
+
+        headers = [
+            "Debit account", "Beneficiary Ac No", "Beneficiary Name", "Amt", "Pay Mod",
+            "Date of Payment", "IFSC", "Payable Lo", "Print Loca", "Bene Mobile No.",
+            "Bene Ema", "Bene add1", "Bene add2", "Bene add3", "Bene add4",
+            "Add Detai1", "Add Detai2", "Add Detai3", "Add Detai4", "Add Detai5", "Remarks"
+        ]
+        ws.append(headers)
+
+        month_str = calendar.month_name[payroll_run.month]
+        year_str = str(payroll_run.year)
+        default_remark = f"Salary For {month_str} {year_str}"
+        debit_account = company.payroll_bank_account or ""
+
+        for item in items:
+            ws.append([
+                debit_account,
+                item.bank_account_number or "",
+                _employee_name(item),
+                item.net_salary,
+                "N",
+                "",
+                item.ifsc_code or "",
+                "", "",
+                item.employee.phone if item.employee else "",
+                "", "", "", "", "",
+                "", "", "", "", "",
+                default_remark
+            ])
+
+        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
+
+    # --- Real export: xlwt (.xls) ---
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet("Bank Sheet")
+
+    bold_style = xlwt.easyxf("font: bold on")
+
     headers = [
-        "Debit account", "Beneficiary Ac No", "Beneficiary Name", "Amt", "Pay Mod", 
-        "Date of Payment", "IFSC", "Payable Lo", "Print Loca", "Bene Mobile No.", 
-        "Bene Ema", "Bene add1", "Bene add2", "Bene add3", "Bene add4", 
+        "Debit account", "Beneficiary Ac No", "Beneficiary Name", "Amt", "Pay Mod",
+        "Date of Payment", "IFSC", "Payable Lo", "Print Loca", "Bene Mobile No.",
+        "Bene Ema", "Bene add1", "Bene add2", "Bene add3", "Bene add4",
         "Add Detai1", "Add Detai2", "Add Detai3", "Add Detai4", "Add Detai5", "Remarks"
     ]
-    ws.append(headers)
-    _make_last_row_bold(ws)
+    for col, h in enumerate(headers):
+        ws.write(0, col, h, bold_style)
 
     month_str = calendar.month_name[payroll_run.month]
     year_str = str(payroll_run.year)
     default_remark = f"Salary For {month_str} {year_str}"
     debit_account = company.payroll_bank_account or ""
 
-    for item in items:
-        ws.append([
+    for row_idx, item in enumerate(items, 1):
+        row_data = [
             debit_account,
             item.bank_account_number or "",
             _employee_name(item),
             item.net_salary,
-            "N", # Pay Mod
-            "", # Date of Payment
+            "N",
+            "",
             item.ifsc_code or "",
-            "", "", # Payable Lo, Print Loca
-            item.employee.phone if item.employee else "", # Bene Mobile No.
-            "", "", "", "", "", # Bene Ema, add1, add2, add3, add4
-            "", "", "", "", "", # Add Detai1-5
-            default_remark # Remarks
-        ])
-
-    if is_preview:
-        return {"tabs": [{"name": ws.title, "rows": ws.rows} for ws in wb.sheets]}
+            "", "",
+            item.employee.phone if item.employee else "",
+            "", "", "", "", "",
+            "", "", "", "", "",
+            default_remark
+        ]
+        for col, val in enumerate(row_data):
+            ws.write(row_idx, col, val)
 
     filename = _new_filename("bank", payroll_run.month, payroll_run.year)
-    wb.save(STORAGE_DIR / filename)
+    wb.save(str(STORAGE_DIR / filename))
     return filename
 
 

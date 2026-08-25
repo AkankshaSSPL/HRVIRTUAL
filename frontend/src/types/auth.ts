@@ -6,6 +6,9 @@ export type AuthUser = {
   is_superuser: boolean;
   roles: string[];
   permissions: string[];
+  employment_type?: string;
+  face_registered: boolean;
+  face_samples_count: number;
 };
 
 export type TokenResponse = {
