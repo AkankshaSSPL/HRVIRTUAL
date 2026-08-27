@@ -160,7 +160,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
             <div className="flex p-1 space-x-1 bg-muted/50 rounded-lg w-full max-w-sm mx-auto">
               <button
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                  structureType === "employee" ? "bg-white text-foreground shadow-sm ring-1 ring-slate-200" : "text-muted-foreground hover:bg-muted"
+                  structureType === "employee" ? "bg-card text-foreground shadow-sm ring-1 ring-slate-200" : "text-muted-foreground hover:bg-muted"
                 }`}
                 onClick={() => setStructureType("employee")}
               >
@@ -168,7 +168,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
               </button>
               <button
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                  structureType === "consultant" ? "bg-white text-foreground shadow-sm ring-1 ring-slate-200" : "text-muted-foreground hover:bg-muted"
+                  structureType === "consultant" ? "bg-card text-foreground shadow-sm ring-1 ring-slate-200" : "text-muted-foreground hover:bg-muted"
                 }`}
                 onClick={() => setStructureType("consultant")}
               >

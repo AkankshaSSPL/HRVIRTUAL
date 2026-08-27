@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "@/services/api";
+import { apiGet, apiPost, apiDownloadFile } from "@/services/api";
 
 export type AttendanceCell = {
   id?: string | null;
@@ -82,4 +82,14 @@ export function getEmployeeAttendanceSummary(employeeId: string, month: number, 
 
 export function updateAttendanceCell(payload: { employee_id: string; attendance_date: string; status: string; remarks?: string }) {
   return apiPost<AttendanceCell>("/attendance/actions", payload);
+}
+
+export async function exportAttendanceExcel(month: number, year: number) {
+  return apiDownloadFile(`/attendance/export?month=${month}&year=${year}`, `attendance_${year}_${month}.xlsx`);
+}
+
+export async function importAttendanceExcel(month: number, year: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiPost<any>(`/attendance/import?month=${month}&year=${year}`, formData);
 }

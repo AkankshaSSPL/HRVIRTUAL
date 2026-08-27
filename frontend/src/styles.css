@@ -8,19 +8,22 @@
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
     --primary: 217 91% 48%;
     --primary-foreground: 210 40% 98%;
     --secondary: 160 60% 38%;
     --secondary-foreground: 0 0% 100%;
     --muted: 210 40% 94%;
     --muted-foreground: 215 16% 42%;
-    --accent: 38 92% 50%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 88%;
     --input: 214 32% 88%;
     --ring: 217 91% 48%;
+    color-scheme: light;
   }
 
   .dark {
@@ -28,23 +31,31 @@
     --foreground: 210 40% 98%;
     --card: 222 40% 10%;
     --card-foreground: 210 40% 98%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 98%;
     --primary: 213 94% 68%;
     --primary-foreground: 222 47% 8%;
     --secondary: 158 64% 44%;
     --secondary-foreground: 222 47% 8%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 70%;
-    --accent: 43 96% 56%;
-    --accent-foreground: 222 47% 8%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 217 33% 20%;
     --input: 217 33% 20%;
     --ring: 213 94% 68%;
+    color-scheme: dark;
   }
 
   * {
     @apply border-border;
+  }
+
+  /* Smooth transitions for interactive elements application-wide */
+  a, button, [role="button"], input, select, textarea, .hover\:bg-accent {
+    @apply transition-all duration-200 ease-in-out;
   }
 
   body {

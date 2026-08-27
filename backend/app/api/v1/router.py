@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     pay_type,
     notifications,
     offers,
+    settings,
 )
 from app.api.v1.endpoints import payroll as payroll_endpoints
 from app.api.v1.endpoints import seats
@@ -58,3 +59,4 @@ api_router.include_router(face_self.router, prefix="/face-auth", tags=["face-aut
 api_router.include_router(face_admin.router, prefix="/face-auth", tags=["face-auth-admin"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(roles.router, prefix="/roles", tags=["roles"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])

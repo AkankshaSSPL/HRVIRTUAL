@@ -61,36 +61,36 @@ export function EditUserModal({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-white p-0 shadow-xl border-slate-100">
-        <DialogHeader className="px-6 py-5 border-b bg-slate-50/50">
-          <DialogTitle className="text-xl text-slate-800">Edit User</DialogTitle>
+      <DialogContent className="sm:max-w-md bg-card p-0 shadow-xl border-slate-100">
+        <DialogHeader className="px-6 py-5 border-b bg-muted/50/50">
+          <DialogTitle className="text-xl text-foreground">Edit User</DialogTitle>
         </DialogHeader>
 
         <div className="p-6 space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Name <span className="text-red-500">*</span></label>
+            <label className="text-sm font-medium text-muted-foreground">Name <span className="text-red-500">*</span></label>
             <Input 
               value={name} 
               onChange={(e) => setName(e.target.value)} 
               placeholder="Enter name"
-              className="bg-white border-slate-200 focus-visible:ring-emerald-500"
+              className="bg-card border-border focus-visible:ring-emerald-500"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Email <span className="text-red-500">*</span></label>
+            <label className="text-sm font-medium text-muted-foreground">Email <span className="text-red-500">*</span></label>
             <Input 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               placeholder="Enter email address"
               type="email"
-              className="bg-white border-slate-200 focus-visible:ring-emerald-500"
+              className="bg-card border-border focus-visible:ring-emerald-500"
             />
           </div>
 
           <div className="space-y-3">
-            <label className="text-sm font-medium text-slate-700">Roles <span className="text-red-500">*</span></label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg max-h-[160px] overflow-y-auto">
+            <label className="text-sm font-medium text-muted-foreground">Roles <span className="text-red-500">*</span></label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-muted/50 border border-border rounded-lg max-h-[160px] overflow-y-auto">
               {(rolesResponse?.data || []).map((r) => {
                 const isSelected = selectedRoles.includes(r.name);
                 return (
@@ -105,14 +105,14 @@ export function EditUserModal({
                       }
                     }}
                   >
-                    <div className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>
+                    <div className={`h-5 w-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'bg-card border-border'}`}>
                       {isSelected && (
                         <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                     </div>
-                    <span className="text-sm text-slate-700">{r.name}</span>
+                    <span className="text-sm text-muted-foreground">{r.name}</span>
                   </div>
                 );
               })}
@@ -120,8 +120,8 @@ export function EditUserModal({
           </div>
         </div>
         
-        <DialogFooter className="px-6 py-4 border-t bg-slate-50/50 flex sm:justify-end gap-2">
-          <Button variant="outline" onClick={onClose} className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200">
+        <DialogFooter className="px-6 py-4 border-t bg-muted/50/50 flex sm:justify-end gap-2">
+          <Button variant="outline" onClick={onClose} className="bg-card hover:bg-muted/50 text-muted-foreground border-border">
             Cancel
           </Button>
           <Button 

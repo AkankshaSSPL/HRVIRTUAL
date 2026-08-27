@@ -211,47 +211,47 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
                   <h4 className="text-sm font-semibold mb-3">Salary Breakdown Preview</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Earnings Card */}
-                    <div className="rounded-md border border-slate-200 border-l-4 border-l-emerald-500 p-4 bg-white shadow-sm flex flex-col">
+                    <div className="rounded-md border border-border border-l-4 border-l-emerald-500 p-4 bg-card shadow-sm flex flex-col">
                       <h5 className="text-sm font-bold text-emerald-600 mb-4">Earnings</h5>
                       <div className="space-y-3 flex-1">
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Basic Salary</span>
-                          <span className="font-medium text-slate-900">₹{(previewQuery.data.earnings["BASIC"] || previewQuery.data.earnings["BASE_PAY"] || previewQuery.data.earnings["MONTHLY_FEE"] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-muted-foreground">Basic Salary</span>
+                          <span className="font-medium text-foreground">₹{(previewQuery.data.earnings["BASIC"] || previewQuery.data.earnings["BASE_PAY"] || previewQuery.data.earnings["MONTHLY_FEE"] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Component Earnings</span>
+                          <span className="text-muted-foreground">Component Earnings</span>
                           <span className="font-medium text-blue-600">₹{Object.entries(previewQuery.data.earnings).filter(([key]) => !["BASIC", "BASE_PAY", "MONTHLY_FEE", "OVERTIME"].includes(key)).reduce((sum, [_, val]) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         {previewQuery.data.earnings["OVERTIME"] ? (
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">Overtime</span>
+                            <span className="text-muted-foreground">Overtime</span>
                             <span className="font-medium text-emerald-600">₹{Number(previewQuery.data.earnings["OVERTIME"]).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         ) : null}
                       </div>
                       <div className="flex justify-between items-center text-sm font-bold border-t pt-3 mt-4">
-                        <span className="text-slate-900">Gross Pay</span>
+                        <span className="text-foreground">Gross Pay</span>
                         <span className="text-emerald-600">₹{Object.values(previewQuery.data.earnings).reduce((sum, val) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
                     {/* Deductions Card */}
-                    <div className="rounded-md border border-slate-200 border-l-4 border-l-rose-500 p-4 bg-white shadow-sm flex flex-col">
+                    <div className="rounded-md border border-border border-l-4 border-l-rose-500 p-4 bg-card shadow-sm flex flex-col">
                       <h5 className="text-sm font-bold text-rose-600 mb-4">Deductions</h5>
                       <div className="space-y-3 flex-1">
                         {previewQuery.data.deductions["LEAVE_DEDUCTION"] ? (
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">LOP Deduction</span>
+                            <span className="text-muted-foreground">LOP Deduction</span>
                             <span className="font-medium text-rose-600">₹{Number(previewQuery.data.deductions["LEAVE_DEDUCTION"]).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         ) : null}
                         <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">Component Deductions</span>
+                          <span className="text-muted-foreground">Component Deductions</span>
                           <span className="font-medium text-rose-600">₹{Object.entries(previewQuery.data.deductions).filter(([key]) => key !== "LEAVE_DEDUCTION").reduce((sum, [_, val]) => sum + Number(val), 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                       <div className="flex justify-between items-center text-sm font-bold border-t pt-3 mt-4">
-                        <span className="text-slate-900">Net Pay</span>
+                        <span className="text-foreground">Net Pay</span>
                         <span className="text-emerald-600">₹{(previewQuery.data.net_pay || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>

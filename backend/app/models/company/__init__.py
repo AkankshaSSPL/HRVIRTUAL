@@ -1,3 +1,3 @@
-from app.models.company.models import HRDocument
+from app.models.company.models import HRDocument, AppSetting
 
-__all__ = ["HRDocument"]
+__all__ = ["HRDocument", "AppSetting"]

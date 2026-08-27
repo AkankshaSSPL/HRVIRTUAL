@@ -75,7 +75,7 @@ export function EditRolePage() {
     return (
       <AppLayout>
         <PageContainer>
-          <div className="flex items-center justify-center h-64 text-slate-500">Loading...</div>
+          <div className="flex items-center justify-center h-64 text-muted-foreground">Loading...</div>
         </PageContainer>
       </AppLayout>
     );
@@ -85,7 +85,7 @@ export function EditRolePage() {
     return (
       <AppLayout>
         <PageContainer>
-          <div className="flex items-center justify-center h-64 text-slate-500">Role not found</div>
+          <div className="flex items-center justify-center h-64 text-muted-foreground">Role not found</div>
         </PageContainer>
       </AppLayout>
     );
@@ -154,25 +154,25 @@ export function EditRolePage() {
         <div className="space-y-6">
           {/* Role Information Card */}
           <SectionCard className="p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">Role Information</h3>
-            <p className="text-sm text-slate-500 mb-6">Update the role name and description.</p>
+            <h3 className="text-lg font-semibold text-foreground mb-1">Role Information</h3>
+            <p className="text-sm text-muted-foreground mb-6">Update the role name and description.</p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Role Name <span className="text-red-500">*</span>
                 </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-500 cursor-not-allowed">
+                <div className="px-3 py-2 bg-muted/50 border border-border rounded-md text-muted-foreground cursor-not-allowed">
                   {role.name}
                 </div>
                 <p className="text-xs text-amber-600 mt-2">This role name cannot be changed.</p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Description
                 </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-500 h-24 cursor-not-allowed">
+                <div className="px-3 py-2 bg-muted/50 border border-border rounded-md text-muted-foreground h-24 cursor-not-allowed">
                   {role.name} Role
                 </div>
               </div>
@@ -180,21 +180,21 @@ export function EditRolePage() {
           </SectionCard>
 
           {/* Role Permissions Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">Role Permissions</h3>
-            <p className="text-sm text-slate-500 mb-1">Select permissions for this role. You can select all permissions at once or manage them by module.</p>
+          <div className="bg-card rounded-lg shadow-sm border border-border p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-1">Role Permissions</h3>
+            <p className="text-sm text-muted-foreground mb-1">Select permissions for this role. You can select all permissions at once or manage them by module.</p>
             <p className="text-xs text-amber-600 mb-6">Note: Only permissions for modules available to your role are shown.</p>
 
             {/* Select All */}
             <div 
-              className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200 mb-6 cursor-pointer hover:bg-slate-100 transition-colors"
+              className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border mb-6 cursor-pointer hover:bg-muted transition-colors"
               onClick={toggleAll}
             >
               <div className="flex items-center gap-3">
                 <CheckboxIcon checked={allPermissions ? selectedPerms.size === allPermissions.length : false} />
-                <span className="font-medium text-slate-900">Select All Permissions</span>
+                <span className="font-medium text-foreground">Select All Permissions</span>
               </div>
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-muted-foreground">
                 {selectedPerms.size} of {allPermissions?.length || 0} selected
               </span>
             </div>
@@ -206,18 +206,18 @@ export function EditRolePage() {
                 const isAllSelected = moduleSelectedCount === module.perms.length;
 
                 return (
-                  <div key={module.name} className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div key={module.name} className="border border-border rounded-lg overflow-hidden">
                     <div 
                       className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${
-                        isAllSelected ? "bg-emerald-50 border-b border-emerald-100" : "bg-slate-50 border-b border-slate-200 hover:bg-slate-100"
+                        isAllSelected ? "bg-emerald-50 border-b border-emerald-100" : "bg-muted/50 border-b border-border hover:bg-muted"
                       }`}
                       onClick={() => toggleModule(module.perms)}
                     >
                       <div className="flex items-center gap-3">
                         <CheckboxIcon checked={isAllSelected} />
-                        <span className="font-medium text-slate-900">{module.name}</span>
+                        <span className="font-medium text-foreground">{module.name}</span>
                       </div>
-                      <span className="text-sm text-slate-500">
+                      <span className="text-sm text-muted-foreground">
                         {moduleSelectedCount} of {module.perms.length} selected
                       </span>
                     </div>
@@ -230,7 +230,7 @@ export function EditRolePage() {
                           onClick={() => togglePermission(perm.code)}
                         >
                           <CheckboxIcon checked={selectedPerms.has(perm.code)} />
-                          <span className="text-sm text-slate-700 select-none">
+                          <span className="text-sm text-muted-foreground select-none">
                             {perm.name}
                           </span>
                         </div>

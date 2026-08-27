@@ -870,7 +870,7 @@ function InlineProgress({ events, status }: { events: RuntimeEvent[]; status: st
   const finalSteps = status === "COMPLETED" && !uniqueSteps.some((step) => step.label === "Completed") ? [...uniqueSteps, { id: "completed", label: "Completed", agentName: "coordinator_agent" }] : uniqueSteps;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-full border bg-slate-50/80 px-3 py-2 text-xs text-muted-foreground shadow-sm dark:bg-zinc-900/60">
+    <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-full border bg-muted/50/80 px-3 py-2 text-xs text-muted-foreground shadow-sm dark:bg-zinc-900/60">
       {finalSteps.map((step, index) => {
         const theme = agentThemeFor(step.agentName);
         return (

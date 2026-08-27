@@ -26,6 +26,15 @@ class AssetCreateRequest(BaseModel):
     asset_type: str
     asset_name: str | None = None
     validity_date: date | None = None
+    serial_number: str | None = None
+    asset_code: str | None = None
+    purchase_date: date | None = None
+    purchase_cost: float | None = None
+    status: str | None = None
+    condition: str | None = None
+    location: str | None = None
+    supplier: str | None = None
+    warranty_info: str | None = None
 
 
 class AssetStatusRequest(BaseModel):
@@ -73,6 +82,15 @@ def create_asset(
         asset_name=payload.asset_name,
         validity_date=payload.validity_date,
         source="hr_manual",
+        serial_number=payload.serial_number,
+        asset_code=payload.asset_code,
+        purchase_date=payload.purchase_date,
+        purchase_cost=payload.purchase_cost,
+        status=payload.status,
+        condition=payload.condition,
+        location=payload.location,
+        supplier=payload.supplier,
+        warranty_info=payload.warranty_info,
     )
     db.commit()
     return asset_to_dict(asset)

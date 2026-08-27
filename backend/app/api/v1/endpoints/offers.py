@@ -20,7 +20,7 @@ def get_offers(db: Session = Depends(get_db)):
     response = []
     for offer in offers:
         emp = offer.employee
-        designation = emp.designation.name if emp and emp.designation else "Unknown"
+        designation = emp.designation.title if emp and emp.designation else "Unknown"
         name = f"{emp.first_name or ''} {emp.last_name or ''}".strip() if emp else "Unknown"
         
         response.append({
@@ -31,7 +31,7 @@ def get_offers(db: Session = Depends(get_db)):
             "start_date": offer.start_date.isoformat(),
             "expires_at": offer.expires_at.isoformat(),
             "offer_date": offer.offer_date.isoformat(),
-            "status": offer.status.value,
+            "status": offer.status,
         })
 
     return {"data": response, "total": len(response)}

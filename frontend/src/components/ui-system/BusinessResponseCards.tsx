@@ -1526,7 +1526,7 @@ export function AttendanceTable({ records }: { records: Array<Record<string, any
   return (
     <div className="overflow-hidden rounded-lg border bg-background/70">
       <table className="w-full text-left text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+        <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-medium">Employee</th>
             <th className="px-3 py-2 font-medium">Date</th>

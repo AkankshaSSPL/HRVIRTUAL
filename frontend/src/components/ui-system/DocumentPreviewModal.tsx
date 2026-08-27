@@ -15,7 +15,7 @@ export function DocumentPreviewModal({ url, onClose }: { url: string | null; onC
         <div className="flex-1 overflow-hidden bg-muted/30 p-2 sm:p-4">
           <iframe 
             src={url} 
-            className="h-full w-full rounded-lg border bg-white shadow-sm" 
+            className="h-full w-full rounded-lg border bg-card shadow-sm" 
             title="Document Preview"
           />
         </div>

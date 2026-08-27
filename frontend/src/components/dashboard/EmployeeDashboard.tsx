@@ -31,8 +31,8 @@ function EmployeeWelcomeBanner({ userName, clockedIn, employmentType }: { userNa
           <h1 className="text-3xl font-bold tracking-tight">
             {userName}
           </h1>
-          <p className="mt-2 text-sm text-slate-400">Here's your personal overview for today.</p>
-          <div className={`mt-4 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${clockedIn ? 'text-emerald-400' : 'text-slate-400'}`}>
+          <p className="mt-2 text-sm text-muted-foreground">Here's your personal overview for today.</p>
+          <div className={`mt-4 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${clockedIn ? 'text-emerald-400' : 'text-muted-foreground'}`}>
             <span className={`flex h-2 w-2 rounded-full ${clockedIn ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-slate-400'}`}></span>
             {clockedIn ? 'Clocked in' : 'Clocked out'}
           </div>
@@ -152,7 +152,7 @@ export function EmployeeDashboard() {
             </Button>
             <Button 
               variant="outline" 
-              className="w-full max-w-[200px] gap-2 bg-slate-50"
+              className="w-full max-w-[200px] gap-2 bg-muted/50"
               disabled={!clockedIn}
               onClick={handleClockOut}
             >

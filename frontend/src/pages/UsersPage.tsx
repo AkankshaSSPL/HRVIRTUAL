@@ -29,7 +29,7 @@ export function UsersPage() {
     {
       header: "#",
       accessorKey: "id", // Just using index instead of id for display
-      cell: ({ row }: any) => <span className="text-slate-500 font-medium">{row.index + 1}</span>,
+      cell: ({ row }: any) => <span className="text-muted-foreground font-medium">{row.index + 1}</span>,
     },
     {
       header: "Name",
@@ -39,13 +39,13 @@ export function UsersPage() {
         const user = row.original;
         return (
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden flex items-center justify-center shrink-0 border border-slate-300">
+            <div className="h-10 w-10 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0 border border-border">
               {/* If we had face embedding or real images, we'd render them. Fallback to icon */}
-              <UserIcon className="h-5 w-5 text-slate-500" />
+              <UserIcon className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="flex flex-col">
-              <span className="font-semibold text-slate-900">{user.full_name || `${user.first_name} ${user.last_name}`}</span>
-              <span className="text-xs text-slate-500">{user.email}</span>
+              <span className="font-semibold text-foreground">{user.full_name || `${user.first_name} ${user.last_name}`}</span>
+              <span className="text-xs text-muted-foreground">{user.email}</span>
             </div>
           </div>
         );
@@ -62,7 +62,7 @@ export function UsersPage() {
               <Badge key={role} className="bg-blue-50 text-blue-700 hover:bg-blue-100 font-normal">
                 {role}
               </Badge>
-            )) : <span className="text-sm text-slate-400">No roles</span>}
+            )) : <span className="text-sm text-muted-foreground">No roles</span>}
           </div>
         );
       },
@@ -79,8 +79,8 @@ export function UsersPage() {
           : "N/A";
           
         return (
-          <div className="flex items-center gap-2 text-slate-600 text-sm">
-            <Calendar className="h-4 w-4 text-slate-400" />
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
             {displayDate}
           </div>
         );
@@ -96,7 +96,7 @@ export function UsersPage() {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={() => {
                 setSelectedUser(user);
                 setDetailsModalOpen(true);
@@ -107,7 +107,7 @@ export function UsersPage() {
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={() => {
                 setSelectedUser(user);
                 setEditModalOpen(true);
@@ -159,11 +159,11 @@ export function UsersPage() {
                   <option value="HR">HR</option>
                   <option value="Employee">Employee</option>
                 </select>
-                <div className="flex items-center border rounded-md p-0.5 bg-slate-50">
+                <div className="flex items-center border rounded-md p-0.5 bg-muted/50">
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-7 w-7 rounded-sm ${viewMode === 'list' ? 'bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                    className={`h-7 w-7 rounded-sm ${viewMode === 'list' ? 'bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white' : 'text-muted-foreground hover:bg-muted'}`}
                     onClick={() => setViewMode('list')}
                   >
                     <List className="h-4 w-4" />
@@ -171,7 +171,7 @@ export function UsersPage() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className={`h-7 w-7 rounded-sm ${viewMode === 'grid' ? 'bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+                    className={`h-7 w-7 rounded-sm ${viewMode === 'grid' ? 'bg-emerald-500 text-white hover:bg-emerald-600 hover:text-white' : 'text-muted-foreground hover:bg-muted'}`}
                     onClick={() => {
                        setViewMode('grid');
                        // Grid view implementation can be added here later

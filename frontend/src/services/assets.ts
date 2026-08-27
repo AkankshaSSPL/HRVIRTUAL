@@ -31,6 +31,15 @@ export function createAsset(payload: {
   asset_type: string;
   asset_name?: string;
   validity_date?: string;
+  serial_number?: string;
+  asset_code?: string;
+  purchase_date?: string;
+  purchase_cost?: number;
+  status?: string;
+  condition?: string;
+  location?: string;
+  supplier?: string;
+  warranty_info?: string;
 }): Promise<AssetRecord> {
   return apiPost<AssetRecord>("/assets", payload);
 }

@@ -100,16 +100,16 @@ export function FaceBiometricTab({
     }
 
     return (
-        <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 relative">
+        <div className="flex items-center justify-between rounded-lg border border-border p-4 relative">
             <div>
                 <p
-                    className={`font-medium ${isRegistered ? "text-emerald-600" : "text-slate-500"
+                    className={`font-medium ${isRegistered ? "text-emerald-600" : "text-muted-foreground"
                         }`}
                 >
                     {isRegistered ? "Face Enrolled" : "No Face Enrolled"}
                 </p>
                 {isRegistered && (
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-muted-foreground">
                         {sampleCount} face sample
                         {sampleCount === 1 ? "" : "s"} stored
                     </p>

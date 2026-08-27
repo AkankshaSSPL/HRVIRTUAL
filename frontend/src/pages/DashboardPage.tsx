@@ -35,7 +35,7 @@ function WelcomeBanner({ totalPresent = 45 }: { totalPresent?: number }) {
       <div className="relative z-10 flex flex-col items-start gap-1">
         <p className="text-sm font-medium text-slate-300">Good afternoon,</p>
         <h1 className="text-3xl font-bold tracking-tight">HR</h1>
-        <p className="mt-2 text-sm text-slate-400">Here's what's happening across your company today.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Here's what's happening across your company today.</p>
         <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-600/50 bg-slate-700/50 px-3 py-1.5 text-sm font-medium text-emerald-400">
           <span className="flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
           {totalPresent} present today
@@ -47,7 +47,7 @@ function WelcomeBanner({ totalPresent = 45 }: { totalPresent?: number }) {
       
       {/* SVG Wave */}
       <svg
-        className="absolute bottom-0 left-0 w-full text-slate-800/30"
+        className="absolute bottom-0 left-0 w-full text-foreground/30"
         viewBox="0 0 1440 120"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

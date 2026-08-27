@@ -80,7 +80,7 @@ export function OffersPage() {
   const getStatusBadge = (status: OfferStatus) => {
     switch (status) {
       case "Draft":
-        return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Draft</span>;
+        return <span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">Draft</span>;
       case "Sent":
         return <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">Sent</span>;
       case "Accepted":
@@ -90,18 +90,18 @@ export function OffersPage() {
       case "Declined":
         return <span className="inline-flex items-center rounded-full bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700">Declined</span>;
       case "Expired":
-        return <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Expired</span>;
+        return <span className="inline-flex items-center rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">Expired</span>;
     }
   };
 
   const tabs = [
     { id: "All", label: "All", icon: LayoutGrid, color: "text-emerald-500", bg: "bg-emerald-50" },
-    { id: "Draft", label: "Draft", icon: FileText, color: "text-slate-500", bg: "bg-slate-100" },
-    { id: "Sent", label: "Sent", icon: Send, color: "text-slate-500", bg: "bg-slate-100" },
-    { id: "Accepted", label: "Accepted", icon: CheckCircle2, color: "text-slate-500", bg: "bg-slate-100" },
-    { id: "Negotiating", label: "Negotiating", icon: MessageCircle, color: "text-slate-500", bg: "bg-slate-100" },
-    { id: "Declined", label: "Declined", icon: XCircle, color: "text-slate-500", bg: "bg-slate-100" },
-    { id: "Expired", label: "Expired", icon: Clock, color: "text-slate-500", bg: "bg-slate-100" },
+    { id: "Draft", label: "Draft", icon: FileText, color: "text-muted-foreground", bg: "bg-muted" },
+    { id: "Sent", label: "Sent", icon: Send, color: "text-muted-foreground", bg: "bg-muted" },
+    { id: "Accepted", label: "Accepted", icon: CheckCircle2, color: "text-muted-foreground", bg: "bg-muted" },
+    { id: "Negotiating", label: "Negotiating", icon: MessageCircle, color: "text-muted-foreground", bg: "bg-muted" },
+    { id: "Declined", label: "Declined", icon: XCircle, color: "text-muted-foreground", bg: "bg-muted" },
+    { id: "Expired", label: "Expired", icon: Clock, color: "text-muted-foreground", bg: "bg-muted" },
   ];
 
   return (
@@ -121,16 +121,16 @@ export function OffersPage() {
             Create Offer
           </Button>
           <Button variant="outline" size="icon">
-            <Settings2 className="h-4 w-4 text-slate-600" />
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </div>
 
-      <SectionCard className="p-0 overflow-hidden bg-white border border-slate-200">
-        <div className="p-4 border-b">
+      <SectionCard className="p-0 overflow-hidden bg-card border-border">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
                 className="pl-9"
@@ -138,7 +138,7 @@ export function OffersPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <select className="border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-700 bg-white min-w-[180px] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
+            <select className="border border-border rounded-md px-3 py-2 text-sm text-foreground bg-background min-w-[180px] focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
               <option>All Candidates</option>
             </select>
             <div className="flex-1" />
@@ -149,7 +149,7 @@ export function OffersPage() {
           </div>
         </div>
 
-        <div className="px-4 border-b flex overflow-x-auto hide-scrollbar">
+        <div className="px-4 border-b border-border flex overflow-x-auto hide-scrollbar">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -158,13 +158,13 @@ export function OffersPage() {
                 onClick={() => setActiveTab(tab.id as OfferStatus | "All")}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   isActive 
-                    ? "border-emerald-500 text-emerald-600" 
-                    : "border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300"
+                    ? "border-primary text-primary" 
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 }`}
               >
-                <tab.icon className={`h-4 w-4 ${isActive ? "text-emerald-500" : "text-slate-400"}`} />
+                <tab.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                 {tab.label}
-                <span className={`px-2 py-0.5 rounded-full text-xs ${isActive ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`px-2 py-0.5 rounded-full text-xs ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                   {counts[tab.id]}
                 </span>
               </button>
@@ -174,7 +174,7 @@ export function OffersPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs text-slate-500 bg-slate-50/50 uppercase font-semibold">
+            <thead className="text-xs text-muted-foreground bg-muted/50 uppercase font-semibold">
               <tr>
                 <th className="px-6 py-4">#</th>
                 <th className="px-6 py-4">Candidate</th>
@@ -186,41 +186,41 @@ export function OffersPage() {
                 <th className="px-6 py-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {isLoading ? (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">Loading offers...</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">Loading offers...</td></tr>
               ) : filteredOffers.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-slate-500">No offers found matching criteria.</td></tr>
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No offers found matching criteria.</td></tr>
               ) : (
                 filteredOffers.map((offer, index) => {
                   const isExpired = offer.status === "Expired";
                   const initial = offer.candidate_name.split(' ').map(n => n[0]).join('').substring(0, 2);
                   
                   return (
-                    <tr key={offer.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 text-slate-500 font-medium">{index + 1}</td>
+                    <tr key={offer.id} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-6 py-4 text-muted-foreground font-medium">{index + 1}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-emerald-700 text-xs font-semibold overflow-hidden">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary text-xs font-semibold overflow-hidden">
                             {initial}
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-900">{offer.candidate_name}</p>
-                            <p className="text-xs text-slate-500">{offer.designation}</p>
+                            <p className="font-semibold text-foreground">{offer.candidate_name}</p>
+                            <p className="text-xs text-muted-foreground">{offer.designation}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900">
+                      <td className="px-6 py-4 font-semibold text-foreground">
                         ${offer.salary.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <CalendarIcon className="h-4 w-4 text-slate-400" />
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CalendarIcon className="h-4 w-4" />
                           {offer.start_date}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className={`flex flex-col gap-1 ${isExpired ? 'text-rose-600' : 'text-slate-600'}`}>
+                        <div className={`flex flex-col gap-1 ${isExpired ? 'text-destructive' : 'text-muted-foreground'}`}>
                           <div className="flex items-center gap-2">
                             <CalendarIcon className="h-4 w-4" />
                             {offer.expires_at}
@@ -232,17 +232,17 @@ export function OffersPage() {
                         {getStatusBadge(offer.status)}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <CalendarIcon className="h-4 w-4 text-slate-400" />
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CalendarIcon className="h-4 w-4" />
                           {offer.offer_date}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
+                          <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors">
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
+                          <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors">
                             <FileEdit className="h-4 w-4" />
                           </button>
                         </div>

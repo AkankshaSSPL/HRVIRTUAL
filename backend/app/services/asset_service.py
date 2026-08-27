@@ -70,17 +70,35 @@ def create_employee_asset(
     asset_name: str | None = None,
     validity_date=None,
     source: str = "hr_manual",
+    serial_number: str | None = None,
+    asset_code: str | None = None,
+    purchase_date: date | None = None,
+    purchase_cost: float | None = None,
+    status: str | None = None,
+    condition: str | None = None,
+    location: str | None = None,
+    supplier: str | None = None,
+    warranty_info: str | None = None,
 ) -> EmployeeAsset:
     """Create and flush a single asset assignment. Caller commits."""
+    meta = {"source": source}
+    if serial_number: meta["serial_number"] = serial_number
+    if purchase_date: meta["purchase_date"] = purchase_date.isoformat() if isinstance(purchase_date, date) else purchase_date
+    if purchase_cost is not None: meta["purchase_cost"] = purchase_cost
+    if condition: meta["asset_condition"] = condition
+    if location: meta["location"] = location
+    if supplier: meta["supplier"] = supplier
+    if warranty_info: meta["warranty_info"] = warranty_info
+    
     asset = EmployeeAsset(
         employee_id=employee.id,
         asset_type=asset_type,
         asset_name=asset_name,
-        asset_code=_next_asset_code(db, employee, asset_type),
-        asset_status="ASSIGNED",
+        asset_code=asset_code or _next_asset_code(db, employee, asset_type),
+        asset_status=status or "ASSIGNED",
         assigned_at=datetime.now(timezone.utc),
         validity_date=validity_date,
-        metadata_json={"source": source},
+        metadata_json=meta,
     )
     db.add(asset)
     db.flush()

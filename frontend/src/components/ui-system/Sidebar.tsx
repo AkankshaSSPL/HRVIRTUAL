@@ -12,12 +12,14 @@ import {
   LayoutGrid,
   LibraryBig,
   LogOut,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
   Settings,
   ShieldCheck,
   Sparkles,
+  Sun,
   UserPlus,
   Users,
   UserCog,
@@ -27,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { SidebarMenu, type SidebarMenuItem } from "@/components/ui-system/SidebarMenu";
 import { cn } from "@/lib/utils";
+import { useTheme } from "./theme-provider";
 import { useAppStore } from "@/stores/appStore";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -84,6 +87,7 @@ export function Sidebar() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const { theme, setTheme } = useTheme();
   const visibleItems = sidebarItems.filter((item) => !item.permission || hasPermission(item.permission));
 
   const content = (mobile = false) => (
@@ -93,9 +97,28 @@ export function Sidebar() {
           <Building2 className="h-5 w-5" aria-hidden="true" />
         </div>
         {(!sidebarCollapsed || mobile) && (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Agentic HRMS</p>
-            <p className="truncate text-xs text-muted-foreground">Enterprise Operations</p>
+          <div className="flex-1 min-w-0 flex items-center justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">Agentic HRMS</p>
+              <p className="truncate text-xs text-muted-foreground">Enterprise Operations</p>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0" 
+              onClick={() => {
+                // Determine current effective theme (if system, check system preference)
+                const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+                setTheme(isDark ? "light" : "dark");
+              }}
+            >
+              {theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches) ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+              <span className="sr-only">Toggle theme</span>
+            </Button>
           </div>
         )}
         {mobile ? (

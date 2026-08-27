@@ -18,6 +18,7 @@ import { OnboardingPage } from "@/pages/OnboardingPage";
 import { PayrollPage } from "@/pages/PayrollPage";
 import { PlaceholderPage } from "@/pages/PlaceholderPage";
 import { SeatsPage } from "@/pages/SeatsPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import { UnauthorizedPage } from "@/pages/UnauthorizedPage";
 import { UsersPage } from "@/pages/UsersPage";
 import { RolesPage } from "@/pages/RolesPage";
@@ -47,7 +48,7 @@ export const router = createBrowserRouter([
   { element: <ProtectedRoute permission="agent_command:view" />, children: [{ path: "/agent-command", element: <AgentCommandPage /> }] },
   { element: <ProtectedRoute permission="audit_logs:view" />, children: [{ path: "/audit-logs", element: <AuditLogsPage /> }] },
   { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/masters", element: <MastersPage /> }] },
-  { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/settings", element: <PlaceholderPage title="Settings" /> }] },
+  { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/settings", element: <SettingsPage /> }] },
   { path: "/system-users", element: <Navigate to="/system-users/users" replace /> },
   { path: "/roles", element: <Navigate to="/system-users/roles" replace /> },
   { element: <ProtectedRoute permission="settings:view" />, children: [{ path: "/system-users/users", element: <UsersPage /> }] },

@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react"; // useMemo still used for metricCards
+import { useMemo, useState, useRef } from "react"; // useMemo still used for metricCards
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Ban, Check, Flag, Home, Minus, Search, X } from "lucide-react";
+import { AlertTriangle, Ban, Check, Flag, Home, Minus, Search, X, Download, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, DrawerPanel, EmployeeProfileDrawer, PageContainer, PageHeader, SectionCard, StatusBadge } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
-import { getAttendanceDashboard, getAttendanceMatrix, updateAttendanceCell, type AttendanceCell, type AttendanceMatrixRow } from "@/services/attendance";
+import { getAttendanceDashboard, getAttendanceMatrix, updateAttendanceCell, exportAttendanceExcel, type AttendanceCell, type AttendanceMatrixRow } from "@/services/attendance";
 import { getLookups } from "@/services/lookups";
 
 const statusStyles: Record<string, string> = {
@@ -17,7 +17,7 @@ const statusStyles: Record<string, string> = {
   UNPAID_LEAVE: "border-red-500 bg-red-100 text-red-700",
   WORK_FROM_HOME: "border-cyan-400 bg-cyan-100 text-cyan-800",
   HOLIDAY: "border-violet-200 bg-violet-50 text-violet-700",
-  WEEKEND: "border-slate-400 bg-slate-200 text-slate-600",
+  WEEKEND: "border-slate-400 bg-muted text-muted-foreground",
   MISSING: "border-zinc-200 bg-zinc-50 text-zinc-500",
 };
 
@@ -49,6 +49,7 @@ export function AttendancePage() {
   const [selectedCell, setSelectedCell] = useState<AttendanceCell | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<AttendanceMatrixRow | null>(null);
   const [remarks, setRemarks] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
 
   const matrixQuery = useQuery({
     queryKey: ["attendance-matrix", month, year, employee, department, status, page, pageSize],
@@ -97,10 +98,32 @@ export function AttendancePage() {
     next();
   }
 
+  async function handleExport() {
+    try {
+      setIsExporting(true);
+      await exportAttendanceExcel(month, year);
+    } catch (err) {
+      alert("Failed to export attendance");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <AppLayout>
       <PageContainer>
-        <PageHeader title="Attendance" description="Workforce attendance matrix, calendars, live exceptions, and payroll-ready monthly summaries." />
+        <PageHeader 
+          title="Attendance" 
+          description="Workforce attendance matrix, calendars, live exceptions, and payroll-ready monthly summaries."
+          actions={
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Export
+              </Button>
+            </div>
+          }
+        />
 
         <div className="grid gap-3 lg:grid-cols-5">
           {metricCards.map(([label, value, statusKey]) => (

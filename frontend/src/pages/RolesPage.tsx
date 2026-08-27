@@ -22,13 +22,13 @@ export function RolesPage() {
     {
       header: "#",
       accessorKey: "id", // Using index for display
-      cell: ({ row }: any) => <span className="text-slate-500 font-medium">{row.index + 1}</span>,
+      cell: ({ row }: any) => <span className="text-muted-foreground font-medium">{row.index + 1}</span>,
     },
     {
       header: "Name",
       accessorKey: "name",
       cell: ({ row }: any) => (
-        <span className="font-semibold text-slate-900">{row.original.name}</span>
+        <span className="font-semibold text-foreground">{row.original.name}</span>
       ),
     },
     {
@@ -48,12 +48,12 @@ export function RolesPage() {
               </Badge>
             ))}
             {remaining > 0 && (
-              <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-normal">
+              <Badge className="bg-muted text-muted-foreground hover:bg-muted font-normal">
                 +{remaining} more
               </Badge>
             )}
             {perms.length === 0 && (
-              <span className="text-sm text-slate-400">No permissions</span>
+              <span className="text-sm text-muted-foreground">No permissions</span>
             )}
           </div>
         );
@@ -66,13 +66,13 @@ export function RolesPage() {
         const role = row.original;
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-700 hover:text-slate-900 hover:bg-slate-100">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted">
               <Eye className="h-4 w-4" />
             </Button>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-8 w-8 text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
               onClick={() => navigate(`/system-users/roles/${role.id}/edit`)}
             >
               <Pencil className="h-4 w-4" />
@@ -102,12 +102,12 @@ export function RolesPage() {
 
         <SectionCard className="p-0 overflow-hidden">
           {/* Toolbar */}
-          <div className="p-4 border-b bg-white">
+          <div className="p-4 border-b bg-card">
             <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 placeholder="Search..." 
-                className="pl-9 bg-white"
+                className="pl-9 bg-card"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />

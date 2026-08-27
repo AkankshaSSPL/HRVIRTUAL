@@ -156,7 +156,7 @@ export function FaceCaptureModal({
                 </DialogHeader>
 
                 <div className="space-y-4">
-                    <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-slate-950 aspect-video">
+                    <div className="relative overflow-hidden rounded-lg border border-border bg-slate-950 aspect-video">
                         <video
                             ref={videoRef}
                             autoPlay
@@ -175,12 +175,12 @@ export function FaceCaptureModal({
                         {Array.from({ length: targetCount }).map((_, i) => (
                             <span
                                 key={i}
-                                className={`h-2.5 w-2.5 rounded-full ${i < frames.length ? "bg-emerald-500" : "bg-slate-200"
+                                className={`h-2.5 w-2.5 rounded-full ${i < frames.length ? "bg-emerald-500" : "bg-muted"
                                     }`}
                             />
                         ))}
                     </div>
-                    <p className="text-center text-sm text-slate-500">
+                    <p className="text-center text-sm text-muted-foreground">
                         {frames.length} / {targetCount} captured
                     </p>
 

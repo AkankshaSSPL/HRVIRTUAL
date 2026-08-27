@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Column, DateTime, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Column, DateTime, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
@@ -24,3 +24,17 @@ class HRDocument(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     author = relationship("User", foreign_keys=[author_id])
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    __table_args__ = (
+        UniqueConstraint("category", "key", name="uq_app_settings_category_key"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    category = Column(String, nullable=False, index=True)
+    key = Column(String, nullable=False, index=True)
+    value = Column(JSONB, nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

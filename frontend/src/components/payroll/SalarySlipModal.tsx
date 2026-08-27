@@ -43,9 +43,9 @@ export function SalarySlipModal({ runId, employeeId, onClose }: SalarySlipModalP
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:bg-white print:static print:inset-auto print:z-auto print:flex print:items-start print:justify-start p-4 print:p-0">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:overflow-visible">
-        <div className="flex justify-between items-center mb-4 sticky top-0 bg-white z-20 py-2 border-b px-6 print:hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:bg-card print:static print:inset-auto print:z-auto print:flex print:items-start print:justify-start p-4 print:p-0">
+      <div className="bg-card rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none print:overflow-visible">
+        <div className="flex justify-between items-center mb-4 sticky top-0 bg-card z-20 py-2 border-b px-6 print:hidden">
           <h2 className="text-xl font-bold">Payslip Preview</h2>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}><X className="w-4 h-4 mr-2"/> Close</Button>
@@ -60,7 +60,7 @@ export function SalarySlipModal({ runId, employeeId, onClose }: SalarySlipModalP
           {isLoading && <div className="p-12 text-center text-gray-500">Loading payslip data...</div>}
           {error && <div className="p-12 text-center text-red-500">Failed to load payslip data.</div>}
           {data && (
-            <div id="payslip-container" className="print-area shadow-xl border rounded-md bg-white print:shadow-none print:border-none">
+            <div id="payslip-container" className="print-area shadow-xl border rounded-md bg-card print:shadow-none print:border-none">
               <SalarySlipTemplate data={data} />
             </div>
           )}

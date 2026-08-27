@@ -23,9 +23,9 @@ export function UserDetailsModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl bg-white p-0 overflow-hidden shadow-xl border-slate-100">
-        <DialogHeader className="px-6 py-5 border-b bg-slate-50/50">
-          <DialogTitle className="flex items-center gap-3 text-xl text-slate-800">
+      <DialogContent className="sm:max-w-2xl bg-card p-0 overflow-hidden shadow-xl border-slate-100">
+        <DialogHeader className="px-6 py-5 border-b bg-muted/50/50">
+          <DialogTitle className="flex items-center gap-3 text-xl text-foreground">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
               <UserIcon className="h-5 w-5" />
             </div>
@@ -37,29 +37,29 @@ export function UserDetailsModal({
           <div className="grid grid-cols-2 gap-x-12 gap-y-10">
             {/* Name */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <User className="h-4 w-4" />
                 Name
               </div>
-              <p className="text-slate-900 font-medium text-base">
+              <p className="text-foreground font-medium text-base">
                 {fullName}
               </p>
             </div>
 
             {/* Email */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Mail className="h-4 w-4" />
                 Email
               </div>
-              <p className="text-slate-900 font-medium text-base">
+              <p className="text-foreground font-medium text-base">
                 {user.email}
               </p>
             </div>
 
             {/* Status */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Activity className="h-4 w-4" />
                 Status
               </div>
@@ -78,18 +78,18 @@ export function UserDetailsModal({
 
             {/* Joined */}
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Calendar className="h-4 w-4" />
                 Joined
               </div>
-              <p className="text-slate-900 font-medium text-base">
+              <p className="text-foreground font-medium text-base">
                 {joinedDate}
               </p>
             </div>
 
             {/* Roles */}
             <div className="space-y-3 col-span-2">
-              <div className="flex items-center gap-2 text-slate-500 text-sm font-medium">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <Shield className="h-4 w-4" />
                 Roles
               </div>
@@ -104,7 +104,7 @@ export function UserDetailsModal({
                     </Badge>
                   ))
                 ) : (
-                  <span className="text-sm text-slate-400 italic">No roles</span>
+                  <span className="text-sm text-muted-foreground italic">No roles</span>
                 )}
               </div>
             </div>
