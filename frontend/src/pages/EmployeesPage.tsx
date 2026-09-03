@@ -70,7 +70,7 @@ export function EmployeesPage() {
     },
   });
   const employees = useMemo(
-    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) === 100),
+    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) === 100 && employee.status !== "EXITED"),
     [employeesQuery.data],
   );
   const latestEmployee = useMemo(() => employees[0], [employees]);

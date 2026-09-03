@@ -8,6 +8,9 @@ import { AppLayout, DrawerPanel, EmployeeProfileDrawer, PageContainer, PageHeade
 import { cn } from "@/lib/utils";
 import { getAttendanceDashboard, getAttendanceMatrix, updateAttendanceCell, exportAttendanceExcel, type AttendanceCell, type AttendanceMatrixRow } from "@/services/attendance";
 import { getLookups } from "@/services/lookups";
+import { useAuthStore } from "@/stores/authStore";
+import { EmployeeAttendancePage } from "./EmployeeAttendancePage";
+import toast from "react-hot-toast";
 
 const statusStyles: Record<string, string> = {
   PRESENT: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -37,6 +40,12 @@ function formatDayTotal(value: number) {
 }
 
 export function AttendancePage() {
+  const hasAttendanceManage = useAuthStore(s => s.hasPermission("attendance:manage") || s.hasPermission("attendance:view"));
+  
+  if (!hasAttendanceManage) {
+    return <EmployeeAttendancePage />;
+  }
+
   const queryClient = useQueryClient();
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -63,6 +72,7 @@ export function AttendancePage() {
   const updateMutation = useMutation({
     mutationFn: (payload: { employee_id: string; attendance_date: string; status: string; remarks?: string }) => updateAttendanceCell(payload),
     onSuccess: async () => {
+        toast.success("Saved successfully");
       setSelectedCell(null);
       await queryClient.invalidateQueries({ queryKey: ["attendance-matrix"] });
       await queryClient.invalidateQueries({ queryKey: ["attendance-dashboard"] });

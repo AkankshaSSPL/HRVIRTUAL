@@ -11,6 +11,7 @@ import {
   type SalaryComponentRecord,
 } from "@/services/payroll";
 import { getLookups } from "@/services/lookups";
+import toast from "react-hot-toast";
 
 type StructureType = "employee" | "consultant";
 
@@ -60,6 +61,7 @@ export function SalaryStructureModal({ open, onOpenChange }: SalaryStructureModa
   const structureMutation = useMutation({
     mutationFn: createSalaryStructure,
     onSuccess: () => {
+        toast.success("Action completed successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-structures"] });
     },
   });

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { createEmployee, getEmployeeFormOptions, type EmployeeCreatePayload } from "@/services/employees";
 import { getLookups } from "@/services/lookups";
 import { getPayTypes } from "@/services/payroll";
+import toast from "react-hot-toast";
 
 const initialForm = {
   first_name: "",
@@ -248,6 +249,7 @@ export function EmployeeCreateWizard({ open, onClose }: { open: boolean; onClose
   const createMutation = useMutation({
     mutationFn: createEmployee,
     onSuccess: async () => {
+        toast.success("Created successfully");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       setForm(initialForm);
       setEmergencyContact(initialEmergencyContact);

@@ -85,3 +85,13 @@
   }
 }
 
+@keyframes swal-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-swal-pop {
+  animation: swal-pop 0.3s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+}
+

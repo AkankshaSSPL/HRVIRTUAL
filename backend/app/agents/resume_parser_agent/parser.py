@@ -13,6 +13,8 @@ def extract_text(path: Path, content_type: str) -> str:
         return extract_pdf_text(path)
     if suffix == ".docx" or content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         return extract_docx_text(path)
+    if suffix in (".txt", ".md", ".markdown"):
+        return path.read_text(encoding="utf-8")
     raise ResumeParsingError("Unsupported resume file type.")
 
 

@@ -41,6 +41,7 @@ def get_notifications(
     pending_onboarding = db.scalars(
         select(Employee).where(
             Employee.deleted_at.is_(None),
+            Employee.employment_status == "ACTIVE",
             Employee.welcome_kit_sent_at.is_(None)
         ).limit(3)
     ).all()
@@ -48,6 +49,7 @@ def get_notifications(
     pending_onboarding_count = db.scalar(
         select(func.count(Employee.id)).where(
             Employee.deleted_at.is_(None),
+            Employee.employment_status == "ACTIVE",
             Employee.welcome_kit_sent_at.is_(None)
         )
     )

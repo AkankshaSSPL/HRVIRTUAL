@@ -72,6 +72,10 @@ export function getAttendanceMatrix(params: { month: number; year: number; emplo
   return apiGet<AttendanceMatrixResponse>(`/attendance/matrix?${search.toString()}`);
 }
 
+export function getMyAttendanceMatrix(params: { month: number; year: number }) {
+  return apiGet<AttendanceMatrixResponse>(`/attendance/my-matrix?month=${params.month}&year=${params.year}`);
+}
+
 export function getAttendanceDashboard() {
   return apiGet<Record<string, number | string>>("/attendance/dashboard");
 }

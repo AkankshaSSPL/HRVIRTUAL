@@ -37,6 +37,10 @@ export function UserProfileModal({ open, onOpenChange }: UserProfileModalProps) 
 
   if (!user) return null;
 
+  const isSuperAdmin = user?.is_superuser;
+  const isHR = user?.roles?.includes("HR");
+  const isEmployeeOnly = user?.roles?.includes("Employee") && !isSuperAdmin && !isHR;
+
   const handleSave = () => {
     alert("Settings saved successfully.");
   };
@@ -63,17 +67,19 @@ export function UserProfileModal({ open, onOpenChange }: UserProfileModalProps) 
                 <User className="w-4 h-4" />
                 Profile
               </button>
-              <button
-                onClick={() => setActiveTab("password")}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === "password" 
-                    ? "bg-accent text-accent-foreground" 
-                    : "text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                <Lock className="w-4 h-4" />
-                Password
-              </button>
+              {!isEmployeeOnly && (
+                <button
+                  onClick={() => setActiveTab("password")}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activeTab === "password" 
+                      ? "bg-accent text-accent-foreground" 
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                  Password
+                </button>
+              )}
             </div>
           </div>
 
@@ -124,7 +130,7 @@ export function UserProfileModal({ open, onOpenChange }: UserProfileModalProps) 
               </>
             )}
 
-            {activeTab === "password" && (
+            {!isEmployeeOnly && activeTab === "password" && (
               <div className="bg-card rounded-xl border border-border p-6 md:p-8 shadow-sm">
                 <h3 className="text-lg font-semibold text-foreground mb-1">Update Password</h3>
                 <p className="text-sm text-muted-foreground mb-6">Ensure your account is using a long, random password to stay secure</p>

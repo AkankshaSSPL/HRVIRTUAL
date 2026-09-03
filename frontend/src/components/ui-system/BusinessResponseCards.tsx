@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, BadgeDollarSign, Ban, BriefcaseBusiness, Building2, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, FileCheck2, Flag, Home, Landmark, Laptop, Mail, ShieldCheck, UserRound, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, IndianRupee, Ban, BriefcaseBusiness, Building2, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, FileCheck2, Flag, Home, Landmark, Laptop, Mail, ShieldCheck, UserRound, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DrawerPanel } from "@/components/ui-system/DrawerPanel";
@@ -22,6 +22,7 @@ import { useRef } from "react";
 import { Upload } from "lucide-react";
 import { createDocument } from "@/services/documents";
 import { getLookups } from "@/services/lookups";
+import toast from "react-hot-toast";
 
 export type EmployeeCardData = {
   id?: string | null;
@@ -187,11 +188,11 @@ export function ApprovalBanner({
 
 export function StatusBannerCard({ title, summary, agent = "employee_agent", variant = "default" }: { title: string; summary: string; agent?: string | null; variant?: "default" | "error" }) {
   const theme = agentThemeFor(agent);
-  
+
   const isError = variant === "error";
   const softClass = isError ? "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-900" : theme.soft;
   const iconClass = isError ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900 dark:text-red-300 dark:border-red-800" : theme.icon;
-  
+
   return (
     <div className={cn("rounded-lg border p-4 shadow-sm", softClass)}>
       <div className="flex gap-3">
@@ -264,7 +265,7 @@ export function MissingFieldCard({
     if (formData.phone) parts.push(`phone is ${formData.phone}`);
     if (formData.name) parts.push(`name is ${formData.name}`);
     if (formData.dob) parts.push(`date of birth is ${formData.dob}`);
-    
+
     if (parts.length > 0 && onAction) {
       onAction(parts.join(" and "));
     }
@@ -283,7 +284,7 @@ export function MissingFieldCard({
         <h3 className="text-base font-semibold">{title}</h3>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{summary ?? "Reply with only the missing information. I will keep the current onboarding context."}</p>
       </div>
-      
+
       {!showForm && (
         <div className="grid gap-2 sm:grid-cols-2">
           {labels.map((label) => (
@@ -299,48 +300,48 @@ export function MissingFieldCard({
           {needsName && (
             <div>
               <label className="text-sm font-medium">Full Name</label>
-              <input 
-                type="text" 
-                required 
+              <input
+                type="text"
+                required
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
-                value={formData.name || ''} 
-                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} 
+                value={formData.name || ''}
+                onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
               />
             </div>
           )}
           {needsEmail && (
             <div>
               <label className="text-sm font-medium">Email Address</label>
-              <input 
-                type="email" 
-                required 
+              <input
+                type="email"
+                required
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
-                value={formData.email || ''} 
-                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} 
+                value={formData.email || ''}
+                onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
               />
             </div>
           )}
           {needsPhone && (
             <div>
               <label className="text-sm font-medium">Phone Number</label>
-              <input 
-                type="tel" 
-                required 
+              <input
+                type="tel"
+                required
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
-                value={formData.phone || ''} 
-                onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))} 
+                value={formData.phone || ''}
+                onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
               />
             </div>
           )}
           {needsDob && (
             <div>
               <label className="text-sm font-medium">Date of Birth</label>
-              <input 
-                type="date" 
-                required 
+              <input
+                type="date"
+                required
                 className="mt-1 block w-full rounded-md border-input bg-background px-3 py-2 text-sm border shadow-sm"
-                value={formData.dob || ''} 
-                onChange={e => setFormData(p => ({ ...p, dob: e.target.value }))} 
+                value={formData.dob || ''}
+                onChange={e => setFormData(p => ({ ...p, dob: e.target.value }))}
               />
             </div>
           )}
@@ -383,7 +384,7 @@ export function OnboardingSummaryCard({
         <Field label="Department" field="department" value={candidate.department ?? null} icon={<Building2 className="h-4 w-4" />} agent="employee_agent" />
         <Field label="Manager" field="manager" value={candidate.manager ?? null} icon={<ShieldCheck className="h-4 w-4" />} agent="approval_agent" />
         <Field label="Joining Date" field="joining_date" value={candidate.joining_date ?? null} icon={<CheckCircle2 className="h-4 w-4" />} agent="employee_agent" />
-        <Field label="Salary" field="salary" value={candidate.salary ? formatSalary(candidate.salary) : null} icon={<BadgeDollarSign className="h-4 w-4" />} agent="payroll_agent" />
+        <Field label="Salary" field="salary" value={candidate.salary ? formatSalary(candidate.salary) : null} icon={<IndianRupee className="h-4 w-4" />} agent="payroll_agent" />
         <Field label="Employment Type" field="employment_type" value={candidate.employment_type ?? null} icon={<FileCheck2 className="h-4 w-4" />} agent="document_agent" />
         <Field label="Location" field="location" value={candidate.location ?? null} icon={<Building2 className="h-4 w-4" />} agent="notification_agent" />
         <Field label="Shift" field="shift" value={candidate.shift ?? null} icon={<FileCheck2 className="h-4 w-4" />} agent="attendance_agent" />
@@ -614,7 +615,7 @@ export function EmployeePreviewCard({
       <div className="grid gap-3 sm:grid-cols-2">
         <InfoCell label="Department" value={record.department ?? "Unassigned"} icon={<Building2 className="h-4 w-4" />} agent="employee_agent" />
         <InfoCell label="Manager" value={record.manager ?? "Unassigned"} icon={<BriefcaseBusiness className="h-4 w-4" />} agent="employee_agent" />
-        <InfoCell label="Salary" value={record.salary ?? "Not available"} icon={<BadgeDollarSign className="h-4 w-4" />} agent="payroll_agent" />
+        <InfoCell label="Salary" value={record.salary ?? "Not available"} icon={<IndianRupee className="h-4 w-4" />} agent="payroll_agent" />
         <InfoCell label="Joining Date" value={record.joiningDate ?? "Not available"} icon={<CheckCircle2 className="h-4 w-4" />} agent="employee_agent" />
       </div>
       {record.officialEmail ? <InlineEntityCard title={record.officialEmail} subtitle="Official email" icon={<Mail className="h-4 w-4" />} agent="notification_agent" /> : null}
@@ -767,6 +768,7 @@ export function EmployeeProfileDrawer({
   const createSalaryMutation = useMutation({
     mutationFn: createSalaryAssignment,
     onSuccess: async () => {
+      toast.success("Created successfully");
       setAssigningSalary(false);
       setSalaryForm({ salary_structure_id: "", gross_salary: "", effective_from: new Date().toISOString().slice(0, 10), reason: "" });
       await queryClient.invalidateQueries({ queryKey: ["employee-salary", employee?.id] });
@@ -804,15 +806,16 @@ export function EmployeeProfileDrawer({
     queryFn: () => getAssets(employee!.id!),
     enabled: Boolean(open && employee?.id && tab === "Assets"),
   });
-  
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [assigningAsset, setAssigningAsset] = useState(false);
   const [assetForm, setAssetForm] = useState({ asset_type: "", asset_name: "", validity_date: "" });
   const assetTypesQuery = useQuery({ queryKey: ["asset-types"], queryFn: getAssetTypes, enabled: Boolean(open && tab === "Assets" && assigningAsset) });
-  
+
   const createAssetMutation = useMutation({
     mutationFn: createAsset,
     onSuccess: async () => {
+      toast.success("Created successfully");
       setAssigningAsset(false);
       setAssetForm({ asset_type: "", asset_name: "", validity_date: "" });
       await queryClient.invalidateQueries({ queryKey: ["employee-assets", employee?.id] });
@@ -822,6 +825,7 @@ export function EmployeeProfileDrawer({
   const assetStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateAssetStatus(id, status),
     onSuccess: async () => {
+      toast.success("Action completed successfully");
       await queryClient.invalidateQueries({ queryKey: ["employee-assets", employee?.id] });
     },
   });
@@ -979,7 +983,7 @@ export function EmployeeProfileDrawer({
                     <p className="text-sm font-semibold">Current Salary Structure</p>
                     <p className="mt-1 text-sm text-muted-foreground">{salaryQuery.data.current.salary_structure}</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <InfoCell label="Gross Salary" value={salaryQuery.data.current.gross_salary_display} icon={<BadgeDollarSign className="h-4 w-4" />} agent="payroll_agent" />
+                      <InfoCell label="Gross Salary" value={salaryQuery.data.current.gross_salary_display} icon={<IndianRupee className="h-4 w-4" />} agent="payroll_agent" />
                       <InfoCell label="Effective Date" value={salaryQuery.data.current.effective_from ?? "Not set"} icon={<CheckCircle2 className="h-4 w-4" />} agent="employee_agent" />
                     </div>
                   </div>
@@ -1058,7 +1062,7 @@ export function EmployeeProfileDrawer({
                   <InfoCell
                     label="Current Salary"
                     value={employee.current_salary != null ? `₹${Number(employee.current_salary).toLocaleString("en-IN")}` : "Not set"}
-                    icon={<BadgeDollarSign className="h-4 w-4" />}
+                    icon={<IndianRupee className="h-4 w-4" />}
                     agent="payroll_agent"
                   />
                 </div>
@@ -1732,6 +1736,7 @@ function EmployeeDocumentUpload({ employeeId, onSuccess }: { employeeId: string;
       }
     },
     onSuccess: async () => {
+      toast.success("Action completed successfully");
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
       setOpen(false);
       setForms([{ document_type: "", expiry_date: "", file: null }]);

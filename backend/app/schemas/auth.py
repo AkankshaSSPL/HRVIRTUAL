@@ -1,11 +1,11 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -40,7 +40,7 @@ class RoleUpdateRequest(BaseModel):
 
 class CurrentUserResponse(BaseModel):
     id: UUID
-    email: EmailStr
+    email: str
     full_name: str
     is_active: bool
     is_superuser: bool
@@ -60,7 +60,7 @@ class UserRead(BaseModel):
     id: UUID
     first_name: str
     last_name: str
-    email: EmailStr
+    email: str
     is_active: bool
     roles: list[str]
     created_at: datetime
@@ -73,7 +73,7 @@ class UserRead(BaseModel):
 class UserUpdateRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
-    email: EmailStr | None = None
+    email: str | None = None
     roles: list[str] | None = None
 
 

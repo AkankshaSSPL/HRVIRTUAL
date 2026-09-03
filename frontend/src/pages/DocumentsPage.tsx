@@ -1,15 +1,19 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Filter, Box, Globe, Clock, Bell, Eye, Download, Upload, Calendar, X, FileText } from "lucide-react";
+import { Search, Filter, Box, Globe, Clock, Bell, Eye, Download, Upload, Calendar, X, FileText, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout, PageContainer, LoadingSkeleton, EmptyState } from "@/components/ui-system";
-import { getHRDocuments, createHRDocument } from "@/services/documents";
+import { getHRDocuments, createHRDocument, deleteHRDocument, bulkDeleteHRDocuments } from "@/services/documents";
+import { getBackendUrl } from "@/services/knowledge";
+import toast from "react-hot-toast";
 
 export function DocumentsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const hasDocumentsManage = true; // In a real app, you would use useAuthStore
   
   // Upload Modal State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -29,7 +33,28 @@ export function DocumentsPage() {
       setIsUploadOpen(false);
       setSelectedFile(null);
       setUploadData({ title: "", description: "", category: "Personal Documents", version: "v1.0", status: "Published" });
+      toast.success("Document uploaded successfully");
     }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteHRDocument(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ["hr-documents"] });
+      setSelectedIds(prev => prev.filter(i => i !== id));
+      toast.success("Document deleted successfully");
+    },
+    onError: () => toast.error("Failed to delete document")
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: string[]) => bulkDeleteHRDocuments(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hr-documents"] });
+      setSelectedIds([]);
+      toast.success("Documents deleted successfully");
+    },
+    onError: () => toast.error("Failed to delete documents")
   });
 
   const handleUploadSubmit = (e: React.FormEvent) => {
@@ -110,9 +135,27 @@ export function DocumentsPage() {
               <h1 className="text-3xl font-bold tracking-tight text-gray-900">HR Documents</h1>
               <p className="text-sm text-gray-500 mt-1">Store and manage official HR documents for employees.</p>
             </div>
-            <Button onClick={() => setIsUploadOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium">
-              <Upload className="w-4 h-4 mr-2" /> Upload Document
-            </Button>
+            <div className="flex gap-2">
+              {hasDocumentsManage && selectedIds.length > 0 && (
+                <Button 
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete ${selectedIds.length} documents?`)) {
+                      bulkDeleteMutation.mutate(selectedIds);
+                    }
+                  }} 
+                  variant="destructive"
+                  className="font-medium"
+                  disabled={bulkDeleteMutation.isPending}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> Delete Selected ({selectedIds.length})
+                </Button>
+              )}
+              {hasDocumentsManage && (
+                <Button onClick={() => setIsUploadOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-medium">
+                  <Upload className="w-4 h-4 mr-2" /> Upload Document
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -218,12 +261,40 @@ export function DocumentsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
               {filteredDocs.map((doc) => (
-                <div key={doc.id} className="bg-card rounded-xl border shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col h-full relative">
+                <div key={doc.id} className={`bg-card rounded-xl border shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col h-full relative ${selectedIds.includes(doc.id) ? 'ring-2 ring-primary border-primary' : ''}`}>
                   <div className="flex justify-between items-start mb-4 gap-2">
-                    <h3 className="font-bold text-gray-900 leading-tight">{doc.title}</h3>
-                    <button className="text-gray-400 hover:text-gray-600 flex-shrink-0">
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-start gap-2">
+                      {hasDocumentsManage && (
+                        <input
+                          type="checkbox"
+                          className="mt-1 rounded text-primary focus:ring-primary w-4 h-4"
+                          checked={selectedIds.includes(doc.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedIds(prev => [...prev, doc.id]);
+                            else setSelectedIds(prev => prev.filter(id => id !== doc.id));
+                          }}
+                        />
+                      )}
+                      <h3 className="font-bold text-gray-900 leading-tight">{doc.title}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      {hasDocumentsManage && (
+                        <button 
+                          className="text-gray-400 hover:text-rose-500 flex-shrink-0"
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to delete this document?")) {
+                              deleteMutation.mutate(doc.id);
+                            }
+                          }}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="flex items-center text-xs text-gray-500 mb-4">
@@ -258,7 +329,7 @@ export function DocumentsPage() {
                       </div>
                     </div>
                     <div className="flex items-center text-gray-400 gap-1 ml-2">
-                      <Download className="w-3.5 h-3.5 cursor-pointer hover:text-gray-600" onClick={() => doc.file_url && window.open(doc.file_url, '_blank')} />
+                      <Download className="w-3.5 h-3.5 cursor-pointer hover:text-gray-600" onClick={() => doc.file_url && window.open(getBackendUrl(doc.file_url), '_blank')} />
                       <span className="text-xs font-medium">{doc.downloads}</span>
                     </div>
                   </div>

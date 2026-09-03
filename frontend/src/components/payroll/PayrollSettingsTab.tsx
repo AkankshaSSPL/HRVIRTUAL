@@ -23,6 +23,7 @@ import {
   type SalaryStructureRecord,
 } from "@/services/payroll";
 import { getEmployees, type EmployeeRecord } from "@/services/employees";
+import toast from "react-hot-toast";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const CALC_TYPE_LABELS: Record<string, string> = {
@@ -312,12 +313,14 @@ function PayTypeDrawer({
 
   const createMut = useMutation({
     mutationFn: createPayType,
-    onSuccess: () => { onSaved(); onClose(); },
+    onSuccess: () => {
+        toast.success("Created successfully"); onSaved(); onClose(); },
     onError: (err) => setError(err instanceof Error ? err.message : "Failed to create pay type."),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof updatePayType>[1] }) => updatePayType(id, payload),
-    onSuccess: () => { onSaved(); onClose(); },
+    onSuccess: () => {
+        toast.success("Saved successfully"); onSaved(); onClose(); },
     onError: (err) => setError(err instanceof Error ? err.message : "Failed to update pay type."),
   });
 
@@ -454,7 +457,8 @@ function RuleBuilderDrawer({
         payload.id,
         payload.rules.map((r, i) => ({ ...r, sequence: i + 1 }))
       ),
-    onSuccess: () => { onSaved(); onClose(); },
+    onSuccess: () => {
+        toast.success("Saved successfully"); onSaved(); onClose(); },
     onError: (err) => setError(err instanceof Error ? err.message : "Failed to save rules."),
   });
 
@@ -554,6 +558,7 @@ function SalaryAssignmentDrawer({ open, onClose }: { open: boolean; onClose: () 
   const mutation = useMutation({
     mutationFn: createSalaryAssignment,
     onSuccess: () => {
+        toast.success("Action completed successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       setSuccess(true);
       setTimeout(() => onClose(), 1500);
@@ -637,6 +642,7 @@ function StatutoryConfigSection() {
   const saveMutation = useMutation({
     mutationFn: (payload: PayrollConfigUpdatePayload) => updatePayrollConfig(payload),
     onSuccess: () => {
+        toast.success("Saved successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-config"] });
       setEditing(false);
       setToast("Payroll configuration updated successfully.");
@@ -772,6 +778,7 @@ export function PayrollSettingsTab() {
   const deleteMut = useMutation({
     mutationFn: deletePayType,
     onSuccess: () => {
+        toast.success("Deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["pay-types"] });
       setDeletingPayType(null);
       setToast("Pay type deleted.");

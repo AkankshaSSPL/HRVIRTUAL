@@ -26,6 +26,7 @@ import {
   type ApprovalRequest,
 } from "@/services/approvals";
 import { useAuthStore } from "@/stores/authStore";
+import toast from "react-hot-toast";
 
 function statusTone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (status === "APPROVED" || status === "EXECUTED") return "success";
@@ -244,6 +245,7 @@ export function ApprovalsPage() {
   const rejectMutation = useMutation({
     mutationFn: ({ id, comment }: { id: string; comment: string }) => rejectApproval(id, comment),
     onSuccess: async () => {
+        toast.success("Rejected successfully");
       setRejectTargetId(null);
       setRejectComment("");
       await refreshApprovals();

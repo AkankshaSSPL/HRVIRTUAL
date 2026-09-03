@@ -27,6 +27,7 @@ type DataTableProps<TData> = {
   emptyDescription?: string;
   actions?: ReactNode;
   renderRowActions?: (row: TData) => ReactNode;
+  hideToolbar?: boolean;
 };
 
 export function DataTable<TData>({
@@ -39,6 +40,7 @@ export function DataTable<TData>({
   emptyDescription = "Try adjusting your search or filters.",
   actions,
   renderRowActions,
+  hideToolbar = false,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -79,7 +81,9 @@ export function DataTable<TData>({
 
   return (
     <div className="space-y-4">
-      <FilterBar search={globalFilter} onSearchChange={setGlobalFilter} searchPlaceholder={searchPlaceholder} actions={actions} />
+      {!hideToolbar && (
+        <FilterBar search={globalFilter} onSearchChange={setGlobalFilter} searchPlaceholder={searchPlaceholder} actions={actions} />
+      )}
       <div className="overflow-hidden rounded-lg border bg-card">
         {loading ? (
           <div className="p-5">

@@ -201,6 +201,7 @@ def attendance_matrix(
     month: int,
     year: int,
     employee: str | None = None,
+    exact_employee_id: UUID | str | None = None,
     department: str | None = None,
     status: str | None = None,
     page: int = 1,
@@ -210,7 +211,7 @@ def attendance_matrix(
     days = [date(year, month, day) for day in range(1, days_in_month + 1)]
     page = max(page, 1)
     page_size = min(max(page_size, 1), 50)
-    employees, total_rows = _matrix_employees(db, employee=employee, department=department, page=page, page_size=page_size)
+    employees, total_rows = _matrix_employees(db, employee=employee, exact_employee_id=exact_employee_id, department=department, page=page, page_size=page_size)
     employee_ids = [item.id for item in employees]
     if not employee_ids:
         return {
@@ -386,8 +387,10 @@ ATTENDANCE_LEGEND = {
 }
 
 
-def _matrix_employees(db: Session, *, employee: str | None, department: str | None, page: int, page_size: int) -> tuple[list[Employee], int]:
+def _matrix_employees(db: Session, *, employee: str | None, exact_employee_id: UUID | str | None = None, department: str | None, page: int, page_size: int) -> tuple[list[Employee], int]:
     statement = select(Employee).where(Employee.deleted_at.is_(None)).order_by(Employee.first_name.asc(), Employee.last_name.asc())
+    if exact_employee_id:
+        statement = statement.where(Employee.id == exact_employee_id)
     if employee:
         pattern = f"%{employee}%"
         statement = statement.where(or_(Employee.first_name.ilike(pattern), Employee.last_name.ilike(pattern)))

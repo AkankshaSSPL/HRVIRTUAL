@@ -7,6 +7,7 @@ import { AppLayout, ConfirmDialog, EmptyState, LoadingSkeleton, PageContainer, P
 import { cn } from "@/lib/utils";
 import { getSeats, vacateSeat, type SeatRecord } from "@/services/seats";
 import { getAssets } from "@/services/assets";
+import toast from "react-hot-toast";
 
 const ZONE_FILTERS = ["All", "A-Zone", "B-Zone"] as const;
 type ZoneFilter = (typeof ZONE_FILTERS)[number];
@@ -68,6 +69,7 @@ export function SeatsPage() {
   const vacateMutation = useMutation({
     mutationFn: (label: string) => vacateSeat(label),
     onSuccess: async () => {
+        toast.success("Deleted successfully");
       setConfirmingVacate(false);
       await queryClient.invalidateQueries({ queryKey: ["seats"] });
     },

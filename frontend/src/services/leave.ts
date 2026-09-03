@@ -40,6 +40,11 @@ export type LeaveWorkspace = {
   calendar: LeaveRequest[];
 };
 
+export type MyLeaveWorkspace = {
+  balances: LeaveBalance[];
+  history: LeaveRequest[];
+};
+
 export type LeavePolicy = {
   id: string;
   name: string;
@@ -71,8 +76,17 @@ export function getLeavePolicies() {
   return apiGet<LeavePolicy[]>("/leave/policies");
 }
 
-export function applyLeave(payload: { employee_id: string; leave_type: string; start_date: string; end_date: string; reason?: string }) {
+export function applyLeave(payload: { employee_id: string; leave_type: string; start_date: string; end_date: string; reason?: string; whom_to_send?: string }) {
   return apiPost<LeaveRequest>("/leave/requests", payload);
+}
+
+export function getMyLeaveWorkspace(year?: number) {
+  const query = year ? `?year=${year}` : "";
+  return apiGet<MyLeaveWorkspace>(`/leave/my-workspace${query}`);
+}
+
+export function applyMyLeave(payload: { leave_type: string; start_date: string; end_date: string; reason?: string; whom_to_send?: string }) {
+  return apiPost<LeaveRequest>("/leave/my-requests", payload);
 }
 
 export async function getLeaveWorkspace(year?: number): Promise<LeaveWorkspace> {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { updateUser, getRoles, type UserRead } from "@/services/system";
+import toast from "react-hot-toast";
 
 export function EditUserModal({
   user,
@@ -49,6 +50,7 @@ export function EditUserModal({
       });
     },
     onSuccess: () => {
+        toast.success("Action completed successfully");
       queryClient.invalidateQueries({ queryKey: ["system_users"] });
       onClose();
     },

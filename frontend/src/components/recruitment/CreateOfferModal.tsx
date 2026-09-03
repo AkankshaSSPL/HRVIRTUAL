@@ -1,45 +1,81 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet } from "@/services/api";
+import { createOffer } from "@/services/offers";
+import toast from "react-hot-toast";
 
 interface CreateOfferModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultCandidateId?: string;
 }
 
-export function CreateOfferModal({ open, onOpenChange }: CreateOfferModalProps) {
-  const [loading, setLoading] = useState(false);
+export function CreateOfferModal({ open, onOpenChange, defaultCandidateId }: CreateOfferModalProps) {
+  const queryClient = useQueryClient();
+  const [formData, setFormData] = useState({
+    candidate_id: defaultCandidateId || "",
+    designation_id: "",
+    salary: "",
+    start_date: "",
+    expires_at: "",
+  });
 
-  const { data: employeesData } = useQuery({
-    queryKey: ["employees"],
-    queryFn: () => apiGet<{ items: any[] }>("/employees?page_size=100"),
+  useEffect(() => {
+    if (defaultCandidateId) {
+      setFormData(prev => ({ ...prev, candidate_id: defaultCandidateId }));
+    }
+  }, [defaultCandidateId]);
+
+  const { data: candidates } = useQuery({
+    queryKey: ["candidates"],
+    queryFn: () => apiGet<any[]>("/candidates"),
   });
   
   const { data: mastersData } = useQuery({
     queryKey: ["masters"],
     queryFn: () => apiGet<{ departments: any[], designations: any[] }>("/masters"),
   });
-  
-  const { data: usersData } = useQuery({
-    queryKey: ["users"],
-    queryFn: () => apiGet<{ data: any[] }>("/users"),
+
+  const designations = mastersData?.designations || [];
+
+  const mutation = useMutation({
+    mutationFn: createOffer,
+    onSuccess: () => {
+      toast.success("Offer created successfully!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+      queryClient.invalidateQueries({ queryKey: ["candidates"] });
+      onOpenChange(false);
+      setFormData({
+        candidate_id: "",
+        designation_id: "",
+        salary: "",
+        start_date: "",
+        expires_at: "",
+      });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to create offer");
+    }
   });
 
-  const employees = employeesData?.items || [];
-  const designations = mastersData?.designations || [];
-  const departments = mastersData?.departments || [];
-  const users = usersData?.data || [];
-
   const handleSave = () => {
-    setLoading(true);
-    // Simulate save
-    setTimeout(() => {
-      setLoading(false);
-      onOpenChange(false);
-    }, 1000);
+    if (!formData.candidate_id || !formData.designation_id || !formData.salary || !formData.start_date || !formData.expires_at) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    
+    const desigName = designations.find(d => d.id === formData.designation_id)?.name || "Unknown";
+    
+    mutation.mutate({
+      candidate_id: formData.candidate_id,
+      designation: desigName,
+      salary: parseFloat(formData.salary),
+      start_date: formData.start_date,
+      expires_at: formData.expires_at,
+    });
   };
 
   return (
@@ -56,11 +92,15 @@ export function CreateOfferModal({ open, onOpenChange }: CreateOfferModalProps) 
             <label className="text-sm font-medium text-foreground">
               Candidate <span className="text-rose-500">*</span>
             </label>
-            <select className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-              <option value="" disabled selected>Select candidate</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.first_name} {emp.last_name}
+            <select 
+              value={formData.candidate_id}
+              onChange={(e) => setFormData({ ...formData, candidate_id: e.target.value })}
+              className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            >
+              <option value="" disabled>Select candidate</option>
+              {candidates?.map((cand) => (
+                <option key={cand.id} value={cand.id}>
+                  {cand.first_name} {cand.last_name}
                 </option>
               ))}
             </select>
@@ -70,8 +110,12 @@ export function CreateOfferModal({ open, onOpenChange }: CreateOfferModalProps) 
             <label className="text-sm font-medium text-foreground">
               Position <span className="text-rose-500">*</span>
             </label>
-            <select className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-              <option value="" disabled selected>Select position</option>
+            <select 
+              value={formData.designation_id}
+              onChange={(e) => setFormData({ ...formData, designation_id: e.target.value })}
+              className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            >
+              <option value="" disabled>Select position</option>
               {designations.map((desig) => (
                 <option key={desig.id} value={desig.id}>
                   {desig.name}
@@ -82,66 +126,35 @@ export function CreateOfferModal({ open, onOpenChange }: CreateOfferModalProps) 
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
-              Department
-            </label>
-            <select className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-              <option value="" disabled selected>Select department</option>
-              {departments.map((dept) => (
-                <option key={dept.id} value={dept.id}>
-                  {dept.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
               Salary <span className="text-rose-500">*</span>
             </label>
-            <Input placeholder="e.g. 5000.00" type="number" />
+            <Input 
+              placeholder="e.g. 50000.00" 
+              type="number" 
+              value={formData.salary}
+              onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
               Start Date <span className="text-rose-500">*</span>
             </label>
-            <Input type="date" />
+            <Input 
+              type="date" 
+              value={formData.start_date}
+              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+            />
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-foreground">
               Expiration Date <span className="text-rose-500">*</span>
             </label>
-            <Input type="date" />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Approved By <span className="text-rose-500">*</span>
-            </label>
-            <select className="w-full h-10 px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent">
-              <option value="" disabled selected>Select approver</option>
-              {users.map((u) => {
-                const employee = employees.find(emp => emp.user_id === u.id);
-                const typeText = employee?.employment_type === "CONSULTANT" ? "Consultant" 
-                               : employee?.employment_type === "FULL_TIME" ? "Employee" 
-                               : (u.roles?.join(", ") || "User");
-                return (
-                  <option key={u.id} value={u.id}>
-                    {u.first_name} {u.last_name} ({typeText})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Benefits
-            </label>
-            <textarea 
-              className="w-full px-3 py-2 rounded-md border border-border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent min-h-[100px] resize-y" 
-              placeholder="e.g. Health insurance, 20 days annual leave, remote work..." 
+            <Input 
+              type="date" 
+              value={formData.expires_at}
+              onChange={(e) => setFormData({ ...formData, expires_at: e.target.value })}
             />
           </div>
         </div>
@@ -153,9 +166,9 @@ export function CreateOfferModal({ open, onOpenChange }: CreateOfferModalProps) 
           <Button 
             className="bg-emerald-500 hover:bg-emerald-600 text-white" 
             onClick={handleSave} 
-            disabled={loading}
+            disabled={mutation.isPending}
           >
-            {loading ? "Saving..." : "Save"}
+            {mutation.isPending ? "Saving..." : "Save Offer"}
           </Button>
         </DialogFooter>
       </DialogContent>

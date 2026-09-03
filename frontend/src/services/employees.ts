@@ -39,6 +39,7 @@ export type EmployeeRecord = {
   user_id?: string | null;
   face_registered?: boolean | null;
   face_samples_count?: number | null;
+  account_activated?: boolean | null;
 };
 
 export type EmployeeFormOptions = {
@@ -133,6 +134,10 @@ export function sendWelcomeKit(employeeId: string) {
 
 export function deactivateEmployee(employeeId: string) {
   return apiPost<EmployeeRecord>(`/employees/${employeeId}/deactivate`, {});
+}
+
+export function sendInvite(employeeId: string) {
+  return apiPost<{ sent: boolean; email: string }>(`/employees/${employeeId}/send-invite`, {});
 }
 
 export function setEmployeeSeat(

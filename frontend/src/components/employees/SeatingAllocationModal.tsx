@@ -22,6 +22,7 @@ import { ConfirmDialog, DrawerPanel } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
 import { assignOnboardingAssets, setEmployeeSeat } from "@/services/employees";
 import { getSeats } from "@/services/seats";
+import toast from "react-hot-toast";
 
 const ROWS = ["A", "B", "C", "D", "E"];
 const COLS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -90,6 +91,7 @@ export function SeatingAllocationModal({ open, employeeId, currentSeat: provided
     mutationFn: ({ seatLabel, assets, assetNames }: { seatLabel: string; assets: string[]; assetNames: Record<string, string> }) =>
       setEmployeeSeat(employeeId, seatLabel, assets, assetNames),
     onSuccess: async (_data, { seatLabel }) => {
+        toast.success("Assigned successfully");
       setPendingSeat(null);
       setOptionalAssets([]);
       setAssetBrands({});
@@ -113,6 +115,7 @@ export function SeatingAllocationModal({ open, employeeId, currentSeat: provided
   const confirmAssetsMutation = useMutation({
     mutationFn: () => assignOnboardingAssets(employeeId, optionalAssets, assetBrands),
     onSuccess: async () => {
+        toast.success("Action completed successfully");
       await invalidateAssetQueries();
       setJustSavedAssets(true);
     },

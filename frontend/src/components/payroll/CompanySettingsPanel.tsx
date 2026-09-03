@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, LoadingSkeleton, SectionCard, ToastNotification } from "@/components/ui-system";
 import { getCompanySettings, updateCompanySettings, type CompanySettingsRecord } from "@/services/payroll";
+import toast from "react-hot-toast";
 
 type SettingsForm = {
   company_name: string;
@@ -74,6 +75,7 @@ export function CompanySettingsPanel() {
   const updateMutation = useMutation({
     mutationFn: updateCompanySettings,
     onSuccess: () => {
+        toast.success("Saved successfully");
       queryClient.invalidateQueries({ queryKey: ["company-settings"] });
       setEditing(false);
       setFormError(null);

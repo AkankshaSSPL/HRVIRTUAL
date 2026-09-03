@@ -78,6 +78,20 @@ class SeatStatus(StrEnum):
     BLOCKED = "BLOCKED"
 
 
+class ExitType(StrEnum):
+    """NEW — offboarding exit reason category."""
+    RESIGNATION = "RESIGNATION"
+    TERMINATION = "TERMINATION"
+    RETIREMENT = "RETIREMENT"
+    END_OF_CONTRACT = "END_OF_CONTRACT"
+
+
+class OffboardingStatus(StrEnum):
+    """NEW"""
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+
+
 class Seat(BaseModel):
     __tablename__ = "seats"
 
@@ -207,6 +221,13 @@ class Employee(BaseModel):
     welcome_kit_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     seat_label: Mapped[str | None] = mapped_column(String(120))
 
+    # --- Offboarding / exit fields (NEW) ---
+    exit_date: Mapped[date | None] = mapped_column(Date)  # last working day
+    exit_type: Mapped[str | None] = mapped_column(String(40))  # RESIGNATION | TERMINATION | RETIREMENT | END_OF_CONTRACT
+    exit_reason: Mapped[str | None] = mapped_column(Text)
+    offboarding_initiated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    offboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     user: Mapped["User | None"] = relationship(back_populates="employee_profile")
     department: Mapped[Department | None] = relationship(back_populates="employees", foreign_keys=[department_id])
     designation: Mapped[Designation | None] = relationship(back_populates="employees")
@@ -218,6 +239,8 @@ class Employee(BaseModel):
     leave_balances: Mapped[list["LeaveBalance"]] = relationship(back_populates="employee")
     payroll_items: Mapped[list["PayrollRunItem"]] = relationship(back_populates="employee")
     records: Mapped[list["EmployeeRecord"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+    offboarding_cases: Mapped[list["OffboardingCase"]] = relationship(back_populates="employee", cascade="all, delete-orphan")
+
     @property
     def face_registered(self) -> bool:
         return self.user.face_registered if self.user else False
@@ -225,6 +248,11 @@ class Employee(BaseModel):
     @property
     def face_samples_count(self) -> int:
         return self.user.face_samples_count if self.user else 0
+
+    @property
+    def account_activated(self) -> bool:
+        """NEW — True once the employee has completed the activation flow."""
+        return bool(self.user and self.user.activated_at is not None)
 
 
 class Candidate(BaseModel):
@@ -244,21 +272,22 @@ class Candidate(BaseModel):
     candidate_status: Mapped[CandidateStatus] = mapped_column(String(40), nullable=False, default=CandidateStatus.NEW)
 
 
-class EmployeeOffer(BaseModel):
-    __tablename__ = "employee_offers"
+class CandidateOffer(BaseModel):
+    __tablename__ = "candidate_offers"
     __table_args__ = (
-        Index("ix_employee_offers_employee_id", "employee_id"),
-        Index("ix_employee_offers_status", "status"),
+        Index("ix_candidate_offers_candidate_id", "candidate_id"),
+        Index("ix_candidate_offers_status", "status"),
     )
 
-    employee_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False)
+    designation: Mapped[str] = mapped_column(String(120), nullable=False, default="Unknown")
     salary: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     expires_at: Mapped[date] = mapped_column(Date, nullable=False)
     offer_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[OfferStatus] = mapped_column(String(40), nullable=False, default=OfferStatus.DRAFT)
 
-    employee: Mapped["Employee"] = relationship()
+    candidate: Mapped["Candidate"] = relationship()
 
 
 class ResumeUpload(BaseModel):
@@ -418,3 +447,52 @@ class EmployeeRecord(BaseModel):
     date_issued: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
 
     employee: Mapped["Employee"] = relationship(back_populates="records")
+
+
+class OffboardingCase(BaseModel):
+    """NEW — holds HR-ticked manual offboarding checklist items. Auto-derived
+    items (assets, seat, access, face) are computed live, not stored here."""
+
+    __tablename__ = "offboarding_cases"
+
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default=OffboardingStatus.IN_PROGRESS)  # IN_PROGRESS | COMPLETED
+    initiated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # HR-ticked manual checklist items
+    knowledge_transfer_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    exit_interview_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    final_settlement_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    id_card_returned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    nda_signed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    client_credentials_cleared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    personal_logins_cleared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    recovery_details_updated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+    employee: Mapped["Employee"] = relationship(back_populates="offboarding_cases")
+
+class Meeting(BaseModel):
+    __tablename__ = "meetings"
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    organizer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    organizer = relationship("User", foreign_keys=[organizer_id])
+    attendees = relationship("MeetingAttendee", back_populates="meeting", cascade="all, delete-orphan")
+
+class MeetingAttendee(BaseModel):
+    __tablename__ = "meeting_attendees"
+
+    meeting_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="ACCEPTED")
+
+    meeting = relationship("Meeting", back_populates="attendees")
+    user = relationship("User")

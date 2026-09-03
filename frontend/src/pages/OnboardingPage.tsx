@@ -11,7 +11,7 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const employeesQuery = useQuery({ queryKey: ["employees"], queryFn: getEmployees, refetchInterval: 15000 });
   const inProgress = useMemo(
-    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) < 100),
+    () => (employeesQuery.data?.items ?? []).filter((employee) => (employee.onboarding_percent ?? 0) < 100 && employee.status === "ACTIVE"),
     [employeesQuery.data],
   );
 

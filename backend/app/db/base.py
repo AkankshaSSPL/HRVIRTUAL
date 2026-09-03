@@ -33,6 +33,10 @@ from app.models import (
     UserRole,
 )
 from app.models.auth.models import FaceLoginAttempt  # noqa: F401
+from app.models.auth.models import ActivationToken  # noqa: F401  (NEW)
+from app.models.employee.models import OffboardingCase  # noqa: F401  (NEW)
+from app.models.knowledge.models import KnowledgeChunk  # noqa: F401  (NEW)
+from app.models.knowledge.models import KnowledgeChatMessage  # noqa: F401  (NEW)
 from app.models.base import Base
 
 __all__ = [
@@ -70,4 +74,8 @@ __all__ = [
     "User",
     "UserRole",
     "FaceLoginAttempt",
+    "ActivationToken",
+    "OffboardingCase",
+    "KnowledgeChunk",
+    "KnowledgeChatMessage",
 ]

@@ -36,9 +36,18 @@ app.add_middleware(
 )
 app.add_middleware(AuthContextMiddleware)
 
+uploads_app = FastAPI()
+uploads_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 uploads_dir = Path("uploads")
 uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+uploads_app.mount("/", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/uploads", uploads_app)
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 

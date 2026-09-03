@@ -19,7 +19,10 @@ export function SalarySlipModal({ runId, employeeId, onClose }: SalarySlipModalP
   const { data, isLoading, error } = useQuery<PayslipData>({
     queryKey: ["payslip", runId, employeeId],
     queryFn: async () => {
-      const data = await apiGet<PayslipData>(`/payroll/runs/${runId}/slip/${employeeId}`);
+      const endpoint = employeeId === "me" 
+        ? `/payroll/my-payslips/${runId}` 
+        : `/payroll/runs/${runId}/slip/${employeeId}`;
+      const data = await apiGet<PayslipData>(endpoint);
       return data;
     },
     enabled: isOpen,

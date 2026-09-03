@@ -8,17 +8,21 @@ from app.agents.leave_agent import api as leave
 from app.agents.resume_parser_agent import api as resume
 from app.agents.salary_assignment_agent import api as salary_assignments
 from app.api.v1.endpoints import (
+    activation,
     assets,
     auth,
     documents,
     employees,
+    candidates,
     face_admin,
     face_auth,
     face_self,
     health,
     hr_documents,
+    knowledge,
     lookups,
     masters,
+    offboarding,
     pay_type,
     notifications,
     offers,
@@ -32,12 +36,15 @@ from app.api.v1.endpoints import users
 from app.api.v1.endpoints import roles
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(activation.router, prefix="/auth", tags=["activation"])
 api_router.include_router(approvals.router, prefix="/approvals", tags=["approvals"])
 api_router.include_router(coordinator.router, prefix="/agents", tags=["agents"])
 api_router.include_router(agent_command.router, prefix="/agent-command", tags=["agent-command"])
+api_router.include_router(candidates.router, prefix="/candidates", tags=["candidates"])
 api_router.include_router(employees.router, prefix="/employees", tags=["employees"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(hr_documents.router, prefix="/hr-documents", tags=["hr-documents"])
+api_router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 api_router.include_router(lookups.router, prefix="/lookups", tags=["lookups"])
 api_router.include_router(masters.router, prefix="/masters", tags=["masters"])
 api_router.include_router(pay_type.router, prefix="/pay-types", tags=["pay-types"])
@@ -51,6 +58,7 @@ api_router.include_router(payroll_endpoints.router, prefix="/payroll", tags=["pa
 api_router.include_router(salary_assignments.router, prefix="/salary-assignments", tags=["salary-assignments"])
 api_router.include_router(assets.router, prefix="/assets", tags=["assets"])
 api_router.include_router(seats.router, prefix="/seats", tags=["seats"])
+api_router.include_router(offboarding.router, prefix="/offboarding", tags=["offboarding"])
 api_router.include_router(health.router, prefix="/health", tags=["health"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

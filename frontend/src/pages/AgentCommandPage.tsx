@@ -48,7 +48,7 @@ import { OnboardingStatusPanel } from "@/components/employees/OnboardingStatusPa
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 import { PayrollRunCard } from "@/components/payroll/PayrollRunCard";
 import { PayrollExportDownload } from "@/components/payroll/PayrollExportDownload";
-
+import { toast as hotToast } from "react-hot-toast";
 const suggestedActions = [
   "Show employees",
   "Generate payroll",
@@ -986,6 +986,7 @@ export function AgentCommandPage() {
       }
     },
     onSuccess: async (workflow) => {
+        hotToast.success("Action completed successfully");
       setSelectedWorkflowId(workflow.workflow_id);
       await queryClient.invalidateQueries({ queryKey: ["agent-command-workflows"] });
       await queryClient.invalidateQueries({ queryKey: ["agent-command-workflow", workflow.workflow_id] });

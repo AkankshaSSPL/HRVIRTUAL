@@ -167,7 +167,7 @@ export function DashboardPage() {
   
   // Check if the user has ONLY the Employee role (or if Employee is their primary role we want to show this for)
   // For safety, if they are Super Admin or HR, show the Admin dashboard.
-  const isSuperAdmin = user?.roles?.includes("Super Admin");
+  const isSuperAdmin = user?.is_superuser;
   const isHR = user?.roles?.includes("HR");
   const isEmployeeOnly = user?.roles?.includes("Employee") && !isSuperAdmin && !isHR;
 

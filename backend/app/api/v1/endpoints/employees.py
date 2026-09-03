@@ -4,8 +4,8 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -25,10 +25,12 @@ from app.db.session import get_db
 from app.models.audit import AuditLog
 from app.models.auth import User
 from app.models.employee import Department, Designation, Employee
+import secrets
 from app.models.employee.models import EmployeeAsset
 from app.services.asset_service import asset_to_dict, assign_onboarding_assets
 from app.services.onboarding_progress import compute_onboarding_progress
-from app.services.email_service import send_welcome_email  # <-- NEW import
+from app.services.email_service import send_credentials_email, send_welcome_email
+from app.core.security import get_password_hash
 from app.services.seat_service import assign_seat
 
 router = APIRouter()
@@ -55,8 +57,8 @@ class EmployeeCreateRequest(BaseModel):
     department_id: UUID | None = None
     designation_id: UUID
     reporting_manager_id: UUID | None = None
-    official_email: EmailStr
-    personal_email: EmailStr
+    official_email: str
+    personal_email: str
     phone: str
 
     @field_validator("phone")
@@ -162,13 +164,13 @@ class EmployeeUpdateRequest(BaseModel):
     department_id: UUID | None = None
     designation_id: UUID | None = None
     reporting_manager_id: UUID | None = None
-    official_email: EmailStr | None = None
-    personal_email: EmailStr | None = None
+    official_email: str | None = None
+    personal_email: str | None = None
     phone: str | None = None
 
     @field_validator("official_email")
     @classmethod
-    def validate_official_email(cls, v: EmailStr | None) -> EmailStr | None:
+    def validate_official_email(cls, v: str | None) -> str | None:
         if v is None:
             raise ValueError("Official email is required and cannot be null")
         return v
@@ -495,6 +497,7 @@ def assign_employee_assets(
 @router.post("", dependencies=[Depends(require_permissions("employees:manage"))])
 def create_employee(
     payload: EmployeeCreateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -502,6 +505,18 @@ def create_employee(
         data = payload.model_dump()
         if not (data.get("employee_code") or "").strip():
             data["employee_code"] = generate_next_employee_code(db)
+
+        # NEW: determine up-front whether this create will attach a brand-new
+        # User (vs. reusing one that already exists for this official_email),
+        # so we only auto-send an activation invite for genuinely new accounts.
+        official_email = data.get("official_email")
+        existing_user_before = (
+            db.scalar(select(User).where(User.email == official_email)) if official_email else None
+        )
+
+        plain_password = secrets.token_urlsafe(8)
+        data["initial_password"] = plain_password
+
         employee, snapshot = create_employee_draft(db, data)
         db.add(
             AuditLog(
@@ -514,10 +529,62 @@ def create_employee(
         )
         db.commit()
         db.refresh(employee)
+
+        # NEW: auto-send the activation invite when a new user account was
+        # just created and the employee has a personal email to send it to.
+        if existing_user_before is None and employee.user_id and employee.personal_email:
+            background_tasks.add_task(send_credentials_email, employee, plain_password)
+            db.add(
+                AuditLog(
+                    entity_type="employee",
+                    entity_id=employee.id,
+                    action="employee.invite_sent",
+                    new_value={"personal_email": employee.personal_email, "trigger": "auto_on_create"},
+                    performed_by=current_user.id,
+                )
+            )
+            db.commit()
+
         return _without_salary(employee_profile(employee))
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{employee_id}/send-invite", dependencies=[Depends(require_permissions("employees:manage"))])
+def send_employee_invite(
+    employee_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    NEW — HR-triggered (re)send of the activation invite email. Works for the
+    initial invite as well as a resend after the previous link expired.
+    """
+    employee = get_employee_by_id(db, employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if not employee.user_id or not employee.user:
+        raise HTTPException(status_code=400, detail="This employee has no linked user account to invite.")
+    if not employee.personal_email:
+        raise HTTPException(status_code=400, detail="Employee has no personal email on file to send the invite to.")
+
+    plain_password = secrets.token_urlsafe(8)
+    employee.user.password_hash = get_password_hash(plain_password)
+    background_tasks.add_task(send_credentials_email, employee, plain_password)
+
+    db.add(
+        AuditLog(
+            entity_type="employee",
+            entity_id=employee.id,
+            action="employee.invite_sent",
+            new_value={"personal_email": employee.personal_email, "trigger": "manual_resend"},
+            performed_by=current_user.id,
+        )
+    )
+    db.commit()
+    return {"sent": True, "email": employee.personal_email}
 
 
 @router.patch("/{employee_id}", dependencies=[Depends(require_permissions("employees:manage"))])

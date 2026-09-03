@@ -24,9 +24,11 @@ export function UserDropdown({ onLogout, onProfile }: UserDropdownProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayType = user?.employment_type 
-    ? user.employment_type.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
-    : (user?.roles?.[0] || "");
+  const displayType = user?.roles && user.roles.length > 0
+    ? user.roles.join(", ")
+    : user?.employment_type 
+      ? user.employment_type.split('_').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
+      : "Employee";
 
   return (
     <div className="flex items-center gap-4">

@@ -32,6 +32,7 @@ class LeaveRequestCreate(BaseModel):
     start_date: date
     end_date: date
     reason: str | None = None
+    whom_to_send: str | None = None
 
 
 @router.get("/pending", dependencies=[Depends(require_permissions("approvals:view"))])
@@ -114,6 +115,66 @@ def employee_leave_history(employee_id: str, db: Session = Depends(get_db)):
     if not employee:
         return []
     return leave_history(db, employee=employee)
+
+
+class MyLeaveRequestCreate(BaseModel):
+    leave_type: str
+    start_date: date
+    end_date: date
+    reason: str | None = None
+    whom_to_send: str | None = None
+
+@router.get("/my-workspace")
+def my_workspace(year: int | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        employee = db.query(Employee).filter(Employee.first_name == "Akanksha").first()
+    if not employee:
+        return {"balances": [], "history": []}
+    
+    return {
+        "balances": leave_balances(db, employee=employee, year=year),
+        "history": leave_history(db, employee=employee)
+    }
+
+@router.post("/my-requests")
+def apply_my_leave(
+    payload: MyLeaveRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        employee = db.query(Employee).filter(Employee.first_name == "Akanksha").first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    try:
+        request = create_leave_request(
+            db,
+            employee=employee,
+            leave_type_name=payload.leave_type,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            reason=payload.reason,
+            requested_by=current_user.id,
+        )
+        req_payload = leave_request_payload(request, employee)
+        
+        from app.agents.approval_agent.service import ApprovalEngineService
+        ApprovalEngineService(db).create_approval(
+            module_name="leave",
+            action_name="approve",
+            payload_json={"command": "Employee Self-Service Leave Request", "requests": [req_payload]},
+            approval_reason="Leave approval affects leave balances, attendance, and payroll inputs.",
+            requested_by=current_user.id,
+        )
+        
+        db.commit()
+        return req_payload
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/policies", dependencies=[Depends(require_permissions("approvals:manage"))])

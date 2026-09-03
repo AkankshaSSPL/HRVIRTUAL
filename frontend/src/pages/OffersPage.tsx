@@ -14,7 +14,14 @@ import {
   CheckCircle2,
   MessageCircle,
   XCircle,
-  Clock
+  Clock,
+  Trash2,
+  ArrowLeft,
+  User,
+  Briefcase,
+  Building,
+  IndianRupee,
+  Calendar
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -24,14 +31,21 @@ import { PageHeader } from "@/components/ui-system/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@/components/ui-system/SectionCard";
+import { ConfirmDialog } from "@/components/ui-system/ConfirmDialog";
 import { CreateOfferModal } from "@/components/recruitment/CreateOfferModal";
 import { apiGet } from "@/services/api";
+import { startOnboarding } from "@/services/candidates";
+import { updateOfferStatus, deleteOffer, sendOffer } from "@/services/offers";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 type OfferStatus = "Draft" | "Sent" | "Accepted" | "Negotiating" | "Declined" | "Expired";
 
 interface Offer {
   id: string;
+  candidate_id: string;
   candidate_name: string;
+  candidate_status: string;
   designation: string;
   salary: number;
   start_date: string;
@@ -41,13 +55,72 @@ interface Offer {
 }
 
 export function OffersPage() {
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<OfferStatus | "All">("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [offerToDelete, setOfferToDelete] = useState<string | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
 
   const { data: offersData, isLoading } = useQuery<{ data: Offer[], total: number }>({
     queryKey: ["offers"],
     queryFn: () => apiGet<{ data: Offer[], total: number }>("/offers"),
+  });
+
+  const onboardingMutation = useMutation({
+    mutationFn: startOnboarding,
+    onSuccess: () => {
+      toast.success("Onboarding started for candidate!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to start onboarding");
+    },
+  });
+
+  const sendOfferMutation = useMutation({
+    mutationFn: (offerId: string) => sendOffer(offerId),
+    onSuccess: () => {
+      toast.success("Offer email sent successfully to candidate!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to send offer email");
+    },
+  });
+
+  const acceptOfferMutation = useMutation({
+    mutationFn: (offerId: string) => updateOfferStatus(offerId, "Accepted"),
+    onSuccess: () => {
+      toast.success("Offer marked as Accepted!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update offer status");
+    },
+  });
+
+  const rejectOfferMutation = useMutation({
+    mutationFn: (offerId: string) => updateOfferStatus(offerId, "Declined"),
+    onSuccess: () => {
+      toast.success("Offer marked as Declined!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update offer status");
+    },
+  });
+
+  const deleteOfferMutation = useMutation({
+    mutationFn: deleteOffer,
+    onSuccess: () => {
+      toast.success("Offer deleted successfully!");
+      queryClient.invalidateQueries({ queryKey: ["offers"] });
+      setOfferToDelete(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to delete offer");
+    },
   });
 
   const offers = offersData?.data || [];
@@ -103,6 +176,89 @@ export function OffersPage() {
     { id: "Declined", label: "Declined", icon: XCircle, color: "text-muted-foreground", bg: "bg-muted" },
     { id: "Expired", label: "Expired", icon: Clock, color: "text-muted-foreground", bg: "bg-muted" },
   ];
+
+  if (selectedOffer) {
+    return (
+      <AppLayout>
+        <PageContainer>
+          <div className="flex justify-between items-start mb-6">
+            <PageHeader 
+              title="Offer Details" 
+              description="View the full details and status of this job offer." 
+            />
+            <Button variant="outline" onClick={() => setSelectedOffer(null)}>
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back
+            </Button>
+          </div>
+          
+          <div className="bg-card rounded-xl border shadow-sm p-6 lg:p-8">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h2 className="text-xl font-bold">{selectedOffer.candidate_name}</h2>
+                <p className="text-sm text-muted-foreground mt-1">ID: {selectedOffer.id.substring(0, 8).toUpperCase()}</p>
+              </div>
+              <div className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border">
+                {selectedOffer.status}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <User className="w-4 h-4" />
+                  <p className="text-xs">Candidate</p>
+                </div>
+                <p className="font-medium text-foreground">{selectedOffer.candidate_name}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Briefcase className="w-4 h-4" />
+                  <p className="text-xs">Position</p>
+                </div>
+                <p className="font-medium text-foreground">{selectedOffer.designation}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Building className="w-4 h-4" />
+                  <p className="text-xs">Department</p>
+                </div>
+                <p className="font-medium text-foreground">Human Resources</p>
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <IndianRupee className="w-4 h-4" />
+                  <p className="text-xs">Salary</p>
+                </div>
+                <p className="font-medium text-foreground">₹{selectedOffer.salary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Calendar className="w-4 h-4" />
+                  <p className="text-xs">Start Date</p>
+                </div>
+                <p className="font-medium text-foreground">{selectedOffer.start_date}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Calendar className="w-4 h-4" />
+                  <p className="text-xs">Expiration Date</p>
+                </div>
+                <p className="font-medium text-foreground">{selectedOffer.expires_at}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Calendar className="w-4 h-4" />
+                  <p className="text-xs">Offer Date</p>
+                </div>
+                <p className="font-medium text-foreground">{selectedOffer.offer_date}</p>
+              </div>
+            </div>
+          </div>
+        </PageContainer>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -210,8 +366,8 @@ export function OffersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-semibold text-foreground">
-                        ${offer.salary.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      <td className="px-6 py-4 font-medium text-foreground">
+                        ₹{offer.salary.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -239,11 +395,41 @@ export function OffersPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors">
+                          {offer.status === "Draft" && (
+                            <Button
+                              size="sm"
+                              className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 px-3 rounded-md text-xs font-medium"
+                              onClick={() => sendOfferMutation.mutate(offer.id)}
+                              disabled={sendOfferMutation.isPending}
+                            >
+                              <Send className="h-4 w-4 mr-2" />
+                              Send Offer
+                            </Button>
+                          )}
+                          {offer.status === "Accepted" && offer.candidate_status !== "HIRED" && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                              onClick={() => onboardingMutation.mutate(offer.candidate_id)}
+                              disabled={onboardingMutation.isPending}
+                            >
+                              Start Onboarding
+                            </Button>
+                          )}
+                          {offer.candidate_status === "HIRED" && (
+                            <span className="text-xs font-medium text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full mr-2">Onboarded</span>
+                          )}
+                          <button 
+                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                            onClick={() => setSelectedOffer(offer)}
+                          >
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors">
-                            <FileEdit className="h-4 w-4" />
+                          <button 
+                            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                            onClick={() => setOfferToDelete(offer.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -259,6 +445,17 @@ export function OffersPage() {
       <CreateOfferModal 
         open={isModalOpen} 
         onOpenChange={setIsModalOpen} 
+      />
+
+      <ConfirmDialog
+        open={!!offerToDelete}
+        title="Delete Offer"
+        description="Are you sure you want to delete this offer? This action cannot be undone."
+        confirmLabel={deleteOfferMutation.isPending ? "Deleting..." : "Delete"}
+        onConfirm={() => {
+          if (offerToDelete) deleteOfferMutation.mutate(offerToDelete);
+        }}
+        onCancel={() => setOfferToDelete(null)}
       />
     </PageContainer>
     </AppLayout>

@@ -48,6 +48,24 @@ def matrix(
     return attendance_matrix(db, month=month, year=year, employee=employee, department=department, status=status, page=page, page_size=page_size)
 
 
+@router.get("/my-matrix")
+def my_matrix(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        # Fallback for Super Admin / demo testing to show Akanksha's attendance
+        employee = db.query(Employee).filter(Employee.first_name == "Akanksha").first()
+        
+    if not employee:
+        return {"days": [], "rows": [], "pagination": {"total_rows": 0}}
+        
+    return attendance_matrix(db, month=month, year=year, exact_employee_id=employee.id, page=1, page_size=10)
+
+
 @router.get("/calendar", dependencies=[Depends(require_permissions("attendance:view"))])
 def calendar(month: int, year: int, employee: str | None = None, department: str | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return attendance_calendar(db, month=month, year=year, employee=employee, department=department)
@@ -111,22 +129,33 @@ def export_attendance_matrix(
     ws = wb.active
     ws.title = f"Attendance {month}-{year}"
     
+    # Standard layout: Employees on rows, Dates on columns
     headers = ["Employee ID", "Employee Name", "Department", "Designation"]
-    if matrix.get("days"):
-        for day in matrix["days"]:
-            headers.append(f"{day['day']} ({day['weekday']})")
+    
+    days = matrix.get("days", [])
+    for day in days:
+        headers.append(f"{day['date'].split('-')[2]} ({day['weekday'][:3]})")
+        
     ws.append(headers)
     
-    for row in matrix.get("rows", []):
-        row_data = [
-            row["employee_id"],
+    from openpyxl.styles import Font
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    
+    rows_data = matrix.get("rows", [])
+    for row in rows_data:
+        emp_row = [
+            str(row["employee_id"]),
             row["employee_name"],
-            row["department"],
-            row["designation"],
+            row.get("department", ""),
+            row.get("designation", "")
         ]
+        
         cells_by_date = {cell["date"]: cell["status"] for cell in row["cells"]}
-        for day in matrix.get("days", []):
+        
+        for day in days:
             status_val = cells_by_date.get(day["date"], "MISSING")
+            
             if status_val == "PRESENT":
                 status_val = "1"
             elif status_val == "ABSENT":
@@ -143,11 +172,18 @@ def export_attendance_matrix(
                 status_val = "WFH"
             elif status_val == "HOLIDAY":
                 status_val = "H"
-            row_data.append(status_val)
-        ws.append(row_data)
+                
+            emp_row.append(status_val)
+            
+        ws.append(emp_row)
         
-    for column in ["A", "B", "C", "D"]:
-        ws.column_dimensions[column].width = 25
+    from openpyxl.utils import get_column_letter
+    ws.column_dimensions['A'].width = 36
+    ws.column_dimensions['B'].width = 25
+    ws.column_dimensions['C'].width = 20
+    ws.column_dimensions['D'].width = 20
+    for i in range(5, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 10
         
     stream = BytesIO()
     wb.save(stream)

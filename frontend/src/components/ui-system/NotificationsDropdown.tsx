@@ -24,7 +24,7 @@ export function NotificationsDropdown() {
   }, []);
 
   const { user } = useAuthStore();
-  const isEmployeeOnly = user?.roles?.includes("Employee") && !user?.roles?.includes("Super Admin") && !user?.roles?.includes("HR");
+  const isEmployeeOnly = user?.roles?.includes("Employee") && !user?.is_superuser && !user?.roles?.includes("HR");
 
   // Fetch data
   const { data } = useQuery({ 

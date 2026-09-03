@@ -9,6 +9,7 @@ import { OnboardingStatusPanel } from "@/components/employees/OnboardingStatusPa
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 import { AppLayout, ConfirmDialog, EmployeeProfileDrawer, EmptyState, LoadingSkeleton, PageContainer, PageHeader } from "@/components/ui-system";
 import { deactivateEmployee, getEmployee, getEmployeeOnboardingProgress, sendWelcomeKit } from "@/services/employees";
+import toast from "react-hot-toast";
 
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +35,7 @@ export function EmployeeProfilePage() {
   const deactivateMutation = useMutation({
     mutationFn: deactivateEmployee,
     onSuccess: async () => {
+        toast.success("Deactivated successfully");
       setConfirmingDeactivate(false);
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       navigate("/employees");
@@ -43,6 +45,7 @@ export function EmployeeProfilePage() {
   const welcomeKitMutation = useMutation({
     mutationFn: sendWelcomeKit,
     onSuccess: async () => {
+        toast.success("Action completed successfully");
       await queryClient.invalidateQueries({ queryKey: ["employee-onboarding-progress", id] });
     },
   });

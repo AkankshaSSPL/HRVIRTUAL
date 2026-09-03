@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Building2, Calendar, FileText, Mail, Phone, ExternalLink } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Building2, Calendar, FileText, Mail, Phone, ExternalLink, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AppLayout, EmptyState, LoadingSkeleton, PageContainer, PageHeader, StatusBadge, DocumentPreviewModal } from "@/components/ui-system";
 import { FaceBiometricTab } from "@/components/employees/FaceBiometricTab";
-import { getEmployee, getEmployeeDocuments, type EmployeeDocumentRecord } from "@/services/employees";
+import { getEmployee, getEmployeeDocuments, sendInvite, type EmployeeDocumentRecord } from "@/services/employees";
 import { BACKEND_URL } from "@/services/api";
+import toast from "react-hot-toast";
 
 type TabKey = "basic" | "employment" | "contact" | "banking" | "certifications" | "documents" | "face";
 
@@ -54,10 +55,20 @@ export function EmployeeViewPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("basic");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
+
   const employeeQuery = useQuery({
     queryKey: ["employee", id],
     queryFn: () => getEmployee(id!),
     enabled: Boolean(id),
+  });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: () => sendInvite(id!),
+    onSuccess: () => {
+        toast.success("Sent successfully");
+      queryClient.invalidateQueries({ queryKey: ["employee", id] });
+    },
   });
 
   const documentsQuery = useQuery({
@@ -103,12 +114,36 @@ export function EmployeeViewPage() {
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-foreground">{displayName}</h2>
                 <p className="text-sm text-muted-foreground">{employee.designation ?? "Employee"}</p>
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
                   <StatusBadge
                     status={(employee.status ?? "ACTIVE").replace("_", " ")}
                     tone={employee.status === "ACTIVE" ? "success" : employee.status === "PROBATION" ? "info" : "warning"}
                   />
+                  <StatusBadge
+                    status={employee.account_activated ? "Active" : "Pending activation"}
+                    tone={employee.account_activated ? "success" : "warning"}
+                  />
                 </div>
+                {!employee.account_activated ? (
+                  // TODO: gate behind employees:manage — wire up whatever
+                  // permission-check hook/util the rest of this app uses
+                  // (I don't have that file to confirm the exact API).
+                  <div className="mt-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={sendInviteMutation.isPending}
+                      onClick={() => sendInviteMutation.mutate()}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      {sendInviteMutation.isPending
+                        ? "Sending..."
+                        : sendInviteMutation.isSuccess
+                          ? "Invite sent"
+                          : "Resend invite"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-6 space-y-3 border-t pt-4">

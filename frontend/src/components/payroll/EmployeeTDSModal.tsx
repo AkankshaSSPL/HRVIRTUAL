@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DrawerPanel } from "@/components/ui-system/DrawerPanel";
 import { createEmployeeTDSConfig } from "@/services/payroll";
+import toast from "react-hot-toast";
 
 interface EmployeeTDSModalProps {
   open: boolean;
@@ -56,6 +57,7 @@ export function EmployeeTDSModal({ open, employeeId, employeeName, onClose }: Em
         remarks: form.remarks.trim() || undefined,
       }),
     onSuccess: () => {
+        toast.success("Created successfully");
       queryClient.invalidateQueries({ queryKey: ["employee-tds-config", employeeId] });
       onClose();
     },

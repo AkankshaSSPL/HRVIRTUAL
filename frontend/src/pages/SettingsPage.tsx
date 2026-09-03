@@ -5,7 +5,7 @@ import {
   Settings,
   Monitor,
   Palette,
-  DollarSign,
+  IndianRupee,
   Mail,
   Calendar,
   ShieldAlert,

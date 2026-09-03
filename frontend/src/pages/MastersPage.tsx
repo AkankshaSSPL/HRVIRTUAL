@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { AppLayout, ConfirmDialog, DrawerPanel, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge } from "@/components/ui-system";
 import { CompanySettingsPanel } from "@/components/payroll/CompanySettingsPanel";
 import { createMaster, deleteMaster, getMasters, updateMaster, type MasterRecord } from "@/services/masters";
+import toast from "react-hot-toast";
 
 type MasterDefinition = {
   key: string;
@@ -87,6 +88,7 @@ export function MastersPage() {
       return editing ? updateMaster(masterType, editing.id, payload) : createMaster(masterType, payload);
     },
     onSuccess: async () => {
+        toast.success("Saved successfully");
       await queryClient.invalidateQueries({ queryKey: ["masters"] });
       await queryClient.invalidateQueries({ queryKey: ["lookups"] });
       await queryClient.invalidateQueries({ queryKey: ["employee-form-options"] });
@@ -99,6 +101,7 @@ export function MastersPage() {
       return deleteMaster(deleting.definition.lookupCategory ? "lookups" : deleting.definition.key, deleting.record.id);
     },
     onSuccess: async () => {
+        toast.success("Deleted successfully");
       await queryClient.invalidateQueries({ queryKey: ["masters"] });
       await queryClient.invalidateQueries({ queryKey: ["lookups"] });
       await queryClient.invalidateQueries({ queryKey: ["employee-form-options"] });

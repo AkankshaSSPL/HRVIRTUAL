@@ -5,19 +5,13 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  AppLayout,
-  DrawerPanel,
-  EmptyState,
-  LoadingSkeleton,
-  PageContainer,
-  PageHeader,
-  SectionCard,
-  StatusBadge,
-} from "@/components/ui-system";
+import { AppLayout, DrawerPanel, EmptyState, LoadingSkeleton, PageContainer, PageHeader, SectionCard, StatusBadge } from "@/components/ui-system";
 import { cn } from "@/lib/utils";
 import { applyLeave, getLeavePolicies, getLeaveWorkspace, type LeaveRequest } from "@/services/leave";
 import { getEmployees } from "@/services/employees";
+import { useAuthStore } from "@/stores/authStore";
+import { EmployeeLeavePage } from "./EmployeeLeavePage";
+import toast from "react-hot-toast";
 
 function requestDate(request: LeaveRequest) {
   const from = request.from_date ?? request.start_date ?? "Date not set";
@@ -33,6 +27,12 @@ function requestTone(status: string): "neutral" | "success" | "warning" | "dange
 }
 
 export function LeavePage() {
+  const hasLeaveManage = useAuthStore(s => s.hasPermission("leave:manage") || s.hasPermission("approvals:view") || s.hasPermission("employees:view"));
+  
+  if (!hasLeaveManage) {
+    return <EmployeeLeavePage />;
+  }
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -51,6 +51,7 @@ export function LeavePage() {
   const applyMutation = useMutation({
     mutationFn: applyLeave,
     onSuccess: async () => {
+        toast.success("Applied successfully");
       await queryClient.invalidateQueries({ queryKey: ["leave-workspace"] });
       await queryClient.invalidateQueries({ queryKey: ["attendance-matrix"] });
       setApplyingLeave(false);

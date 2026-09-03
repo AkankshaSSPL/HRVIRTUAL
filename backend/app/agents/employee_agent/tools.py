@@ -63,6 +63,7 @@ def employee_to_summary(employee: Employee) -> dict[str, Any]:
         "face_registered": bool(employee.face_registered),
         "face_samples_count": employee.face_samples_count or 0,
         "user_id": str(employee.user_id) if employee.user_id else None,
+        "account_activated": bool(employee.account_activated),  # NEW
     }
 
 
@@ -372,9 +373,10 @@ def create_employee_draft(db: Session, payload: dict[str, Any]) -> tuple[Employe
     if first_name and official_email:
         existing_user = db.scalar(select(User).where(User.email == official_email))
         if not existing_user:
+            initial_password = payload.get("initial_password") or uuid4().hex
             user = User(
                 email=official_email,
-                password_hash=get_password_hash(uuid4().hex),
+                password_hash=get_password_hash(initial_password),
                 first_name=first_name,
                 last_name=last_name or "Employee",
                 is_active=True,

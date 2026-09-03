@@ -26,6 +26,9 @@ import {
   type SalaryStructureRecord,
 } from "@/services/payroll";
 import { getLookups } from "@/services/lookups";
+import { useAuthStore } from "@/stores/authStore";
+import { EmployeePayrollPage } from "./EmployeePayrollPage";
+import toast from "react-hot-toast";
 
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MONTH_OPTIONS = MONTH_NAMES.map((label, i) => ({ value: i + 1, label }));
@@ -56,6 +59,12 @@ const defaultFormState: SalaryComponentForm = {
 };
 
 export function PayrollPage() {
+  const hasPayrollView = useAuthStore(s => s.hasPermission("payroll:manage") || s.hasPermission("payroll:view"));
+  
+  if (!hasPayrollView) {
+    return <EmployeePayrollPage />;
+  }
+
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"payroll" | "settings">("payroll");
   const [formOpen, setFormOpen] = useState(false);
@@ -102,6 +111,7 @@ export function PayrollPage() {
   const generateRunMutation = useMutation({
     mutationFn: () => generatePayrollRun(selectedMonth, selectedYear),
     onSuccess: (data) => {
+        toast.success("Generated successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       setRunError(null);
       setDismissedRuns((prev) => {
@@ -127,6 +137,7 @@ export function PayrollPage() {
   const submitApprovalMutation = useMutation({
     mutationFn: (runId: string) => submitPayrollApproval(runId),
     onSuccess: () => {
+        toast.success("Submitted successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-runs"] });
       setRunError(null);
     },
@@ -136,6 +147,7 @@ export function PayrollPage() {
   const exportRunMutation = useMutation({
     mutationFn: ({ runId, type }: { runId: string; type: "employee" | "consultant" | "bank" | "tds" }) => exportPayrollSheet(runId, type),
     onSuccess: async (result, variables) => {
+        toast.success("Exported successfully");
       const typeLabels: Record<string, string> = { employee: "Employee Sheet", consultant: "Consultant Sheet", bank: "Bank Sheet", tds: "TDS Sheet" };
       setExportResults((prev) => ({ ...prev, [variables.runId]: { title: typeLabels[variables.type], ...result } }));
       
@@ -156,6 +168,7 @@ export function PayrollPage() {
   const createMutation = useMutation({
     mutationFn: createSalaryComponent,
     onSuccess: () => {
+        toast.success("Created successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-components"] });
       closeForm();
     },
@@ -166,6 +179,7 @@ export function PayrollPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof updateSalaryComponent>[1] }) => updateSalaryComponent(id, payload),
     onSuccess: () => {
+        toast.success("Saved successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-components"] });
       queryClient.invalidateQueries({ queryKey: ["payroll-structures"] });
       closeForm();
@@ -175,6 +189,7 @@ export function PayrollPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteSalaryComponent,
     onSuccess: () => {
+        toast.success("Deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["payroll-components"] });
       setDeletingComponent(null);
       setFormError(null);

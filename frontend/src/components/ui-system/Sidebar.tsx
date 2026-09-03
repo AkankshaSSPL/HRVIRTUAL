@@ -5,13 +5,16 @@ import {
   BriefcaseBusiness,
   Building2,
   CalendarClock,
+  CalendarDays,
   ClipboardCheck,
   FileText,
   Gauge,
   Landmark,
   LayoutGrid,
   LibraryBig,
+  Laptop,
   LogOut,
+  MessageCircleQuestion,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
@@ -35,11 +38,14 @@ import { useAuthStore } from "@/stores/authStore";
 
 export const sidebarItems: SidebarMenuItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: Gauge, permission: "dashboard:view" },
+  { name: "Calendar", href: "/calendar", icon: CalendarDays, permission: "dashboard:view" },
+  { name: "My Allocations", href: "/my-allocations", icon: Laptop, permission: "dashboard:view" },
+  { name: "My Documents", href: "/my-documents", icon: FileText, permission: "dashboard:view" },
   { name: "Employees", href: "/employees", icon: Users, permission: "employees:view" },
-  { 
-    name: "Recruitment", 
-    href: "/candidates", 
-    icon: UserPlus, 
+  {
+    name: "Recruitment",
+    href: "/candidates",
+    icon: UserPlus,
     permission: "candidates:view",
     children: [
       { name: "Candidates", href: "/candidates" },
@@ -48,10 +54,11 @@ export const sidebarItems: SidebarMenuItem[] = [
     ]
   },
   { name: "Seat Layout", href: "/seats", icon: LayoutGrid, permission: "employees:view" },
-  { name: "Attendance", href: "/attendance", icon: CalendarClock, permission: "attendance:view" },
+  { name: "Attendance", href: "/attendance", icon: CalendarClock, permission: "dashboard:view" },
   { name: "Leave", href: "/leave", icon: ClipboardCheck, permission: "leave:view" },
-  { name: "Payroll", href: "/payroll", icon: Landmark, permission: "payroll:view" },
+  { name: "Payroll", href: "/payroll", icon: Landmark, permission: "dashboard:view" },
   { name: "Documents", href: "/documents", icon: FileText, permission: "documents:view" },
+  { name: "Knowledge Base", href: "/knowledge", icon: MessageCircleQuestion, permission: "knowledge:chat" },
   { name: "Assets", href: "/assets", icon: BriefcaseBusiness, permission: "assets:view" },
   { name: "Offboarding", href: "/offboarding", icon: LogOut, permission: "offboarding:view" },
   { name: "Approvals", href: "/approvals", icon: ShieldCheck, permission: "approvals:view" },
@@ -87,8 +94,19 @@ export function Sidebar() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
   const hasPermission = useAuthStore((state) => state.hasPermission);
+  const user = useAuthStore((state) => state.user);
   const { theme, setTheme } = useTheme();
-  const visibleItems = sidebarItems.filter((item) => !item.permission || hasPermission(item.permission));
+  const visibleItems = sidebarItems.filter((item) => {
+    if (item.permission && !hasPermission(item.permission)) return false;
+    
+    // Hide 'My Documents' if the user has full access to 'Documents'
+    if (item.name === "My Documents" && hasPermission("documents:view")) return false;
+
+    // Hide 'My Allocations' for Super Admin since they manage assets globally
+    if (item.name === "My Allocations" && user?.is_superuser) return false;
+
+    return true;
+  });
 
   const content = (mobile = false) => (
     <>
@@ -102,10 +120,10 @@ export function Sidebar() {
               <p className="truncate text-sm font-semibold">Agentic HRMS</p>
               <p className="truncate text-xs text-muted-foreground">Enterprise Operations</p>
             </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0" 
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
               onClick={() => {
                 // Determine current effective theme (if system, check system preference)
                 const isDark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

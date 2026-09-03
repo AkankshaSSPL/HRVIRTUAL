@@ -51,3 +51,15 @@ export function getHRDocuments() {
 export function createHRDocument(formData: FormData) {
   return apiPost<HRDocumentRecord>("/hr-documents", formData);
 }
+
+export function deleteHRDocument(documentId: string) {
+  return apiDelete<{ message: string }>(`/hr-documents/${documentId}`);
+}
+
+export function bulkDeleteHRDocuments(documentIds: string[]) {
+  return apiPost<{ message: string }>("/hr-documents/bulk-delete", { document_ids: documentIds });
+}
+
+export function getMyDocuments() {
+  return apiGet<EmployeeDocumentRecord[]>("/dashboard/my-documents");
+}

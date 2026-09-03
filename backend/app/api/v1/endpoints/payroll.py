@@ -929,3 +929,59 @@ def get_payslip(run_id: UUID, employee_id: UUID, db: Session = Depends(get_db)):
             "net_pay": float(item.net_salary),
         }
     }
+
+
+class MyPayslipSummary(BaseModel):
+    run_id: UUID
+    month: int
+    year: int
+    gross_salary: float
+    net_salary: float
+    generated_on: date | None = None
+    status: str
+
+@router.get("/my-payslips", response_model=list[MyPayslipSummary])
+def list_my_payslips(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        employee = db.query(Employee).filter(Employee.first_name == "Akanksha").first()
+    if not employee:
+        return []
+    
+    items = db.scalars(
+        select(PayrollRunItem)
+        .join(PayrollRun, PayrollRunItem.payroll_run_id == PayrollRun.id)
+        .where(
+            PayrollRunItem.employee_id == employee.id,
+            PayrollRun.deleted_at.is_(None)
+        )
+        .order_by(PayrollRun.year.desc(), PayrollRun.month.desc())
+    ).all()
+    
+    result = []
+    for item in items:
+        run = db.get(PayrollRun, item.payroll_run_id)
+        result.append({
+            "run_id": run.id,
+            "month": run.month,
+            "year": run.year,
+            "gross_salary": float(item.gross_salary),
+            "net_salary": float(item.net_salary),
+            "generated_on": run.approved_at.date() if run.approved_at else None,
+            "status": "Generated"
+        })
+    return result
+
+@router.get("/my-payslips/{run_id}")
+def get_my_payslip(run_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    employee = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+    if not employee:
+        employee = db.query(Employee).filter(Employee.first_name == "Akanksha").first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+        
+    run = db.scalar(select(PayrollRun).where(PayrollRun.id == run_id, PayrollRun.deleted_at.is_(None)))
+    if not run:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+        
+    return get_payslip(run_id=run_id, employee_id=employee.id, db=db)

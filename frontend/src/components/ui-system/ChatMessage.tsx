@@ -34,7 +34,7 @@ export function ChatMessage({ sender, name, time, children, avatar, meta, agentN
         </div>
         <div
           className={cn(
-            "rounded-lg border px-4 py-3 text-sm shadow-soft",
+            "rounded-2xl border px-4 py-3 text-sm shadow-soft",
             sender === "user" ? "bg-primary text-primary-foreground" : cn("text-card-foreground", theme.soft),
           )}
         >

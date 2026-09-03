@@ -300,3 +300,21 @@ export type PreviewSalaryBreakdownResponse = {
 export function previewSalaryBreakdown(employeeId: string, salary: number) {
   return apiGet<PreviewSalaryBreakdownResponse>(`/payroll/preview-breakdown?employee_id=${employeeId}&salary=${salary}`);
 }
+
+export type MyPayslipSummary = {
+  run_id: string;
+  month: number;
+  year: number;
+  gross_salary: number;
+  net_salary: number;
+  generated_on: string | null;
+  status: string;
+};
+
+export function getMyPayslips() {
+  return apiGet<MyPayslipSummary[]>("/payroll/my-payslips");
+}
+
+export function getMyPayslip(runId: string) {
+  return apiGet<any>(`/payroll/my-payslips/${runId}`);
+}

@@ -13,7 +13,7 @@ type SectionCardProps = {
 
 export function SectionCard({ title, description, action, icon, children, className }: SectionCardProps) {
   return (
-    <section className={cn("rounded-lg border bg-card text-card-foreground shadow-soft", className)}>
+    <section className={cn("rounded-lg border bg-card text-card-foreground shadow-soft transition-all duration-300 hover:shadow-md", className)}>
       {(title || description || action) && (
         <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">

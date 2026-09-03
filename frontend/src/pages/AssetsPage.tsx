@@ -23,6 +23,7 @@ import {
   type AssetRecord,
 } from "@/services/assets";
 import { getEmployees } from "@/services/employees";
+import toast from "react-hot-toast";
 
 const STATUS_FILTERS = ["All", "ASSIGNED", "RETURN_PENDING", "RETURNED", "LOST"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -86,6 +87,7 @@ export function AssetsPage() {
   const createMutation = useMutation({
     mutationFn: createAsset,
     onSuccess: async () => {
+        toast.success("Created successfully");
       setAddOpen(false);
       setForm(EMPTY_FORM);
       await queryClient.invalidateQueries({ queryKey: ["assets"] });
@@ -95,6 +97,7 @@ export function AssetsPage() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateAssetStatus(id, status),
     onSuccess: async () => {
+        toast.success("Status updated successfully");
       setLostConfirmId(null);
       await queryClient.invalidateQueries({ queryKey: ["assets"] });
     },

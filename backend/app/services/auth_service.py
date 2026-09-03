@@ -33,6 +33,7 @@ PERMISSIONS = {
     "documents:manage": "Manage documents",
     "assets:view": "View assets",
     "offboarding:view": "View offboarding",
+    "offboarding:manage": "Manage employee offboarding",
     "approvals:view": "View approvals",
     "approvals:manage": "Manage approvals",
     "agent_command:view": "View agent command center",
@@ -42,6 +43,8 @@ PERMISSIONS = {
     "face:enroll": "Enroll and remove employee face biometrics",
     "face:view_logs": "View face login attempt audit log",
     "face:retrain": "Trigger face KNN classifier retrain",
+    "knowledge:chat": "Chat with HR knowledge base",
+    "knowledge:manage": "Manage & index knowledge base documents",
 }
 
 ROLE_PERMISSION_CODES = {
@@ -62,16 +65,18 @@ ROLE_PERMISSION_CODES = {
         "documents:manage",
         "assets:view",
         "offboarding:view",
+        "offboarding:manage",
         "approvals:view",
         "approvals:manage",
         "agent_command:view",
         "audit_logs:view",
-        "settings:view",
-        "settings:manage",
+
         "face:enroll",
         "face:view_logs",
+        "knowledge:chat",
+        "knowledge:manage",
     ],
-    "Employee": ["dashboard:view", "documents:view", "leave:view"],
+    "Employee": ["dashboard:view", "documents:view", "leave:view", "knowledge:chat"],
 }
 
 

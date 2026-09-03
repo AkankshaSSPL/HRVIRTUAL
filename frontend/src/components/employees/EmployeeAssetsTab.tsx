@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/ui-system/StatusBadge";
 import { agentThemeFor } from "@/lib/agent-theme";
 import { cn } from "@/lib/utils";
 import { createAsset, getAssets, getAssetTypes, updateAssetStatus, type AssetRecord } from "@/services/assets";
+import toast from "react-hot-toast";
 
 export function EmployeeAssetsTab({ employeeId }: { employeeId: string }) {
   const queryClient = useQueryClient();
@@ -28,6 +29,7 @@ export function EmployeeAssetsTab({ employeeId }: { employeeId: string }) {
   const createAssetMutation = useMutation({
     mutationFn: createAsset,
     onSuccess: async () => {
+        toast.success("Created successfully");
       setAssigningAsset(false);
       setAssetForm({ asset_type: "", asset_name: "", validity_date: "" });
       await queryClient.invalidateQueries({ queryKey: ["employee-assets", employeeId] });
@@ -37,6 +39,7 @@ export function EmployeeAssetsTab({ employeeId }: { employeeId: string }) {
   const assetStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateAssetStatus(id, status),
     onSuccess: async () => {
+        toast.success("Action completed successfully");
       await queryClient.invalidateQueries({ queryKey: ["employee-assets", employeeId] });
     },
   });

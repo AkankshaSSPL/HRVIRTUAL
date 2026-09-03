@@ -10,6 +10,7 @@ import { getEmployeeTDSConfigs, getPayTypes, previewSalaryBreakdown } from "@/se
 import { EmployeeTDSModal } from "@/components/payroll/EmployeeTDSModal";
 import { SeatingAllocationModal } from "@/components/employees/SeatingAllocationModal";
 import { validateEmployeeForm } from "@/utils/validators";
+import toast from "react-hot-toast";
 
 const emptyForm: Partial<EmployeeCreatePayload> = {};
 
@@ -57,6 +58,7 @@ export function EmployeeEditDrawer({ employeeId, open, onClose }: { employeeId: 
   const updateMutation = useMutation({
     mutationFn: (payload: Partial<EmployeeCreatePayload>) => updateEmployee(employeeId!, payload),
     onSuccess: async () => {
+        toast.success("Saved successfully");
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       await queryClient.invalidateQueries({ queryKey: ["employee-detail", employeeId] });
       await queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
